@@ -28,7 +28,18 @@ export function CardSelector({ hand, onHandChange }: CardSelectorProps) {
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const [selectedSection, setSelectedSection] = useState<keyof Hand>('hero')
 
+  const isCardUsed = (card: Card): boolean => {
+    // check if card is used in any section
+    return Object.values(hand).some(sectionCards =>
+      sectionCards.some(c => c.suit === card.suit && c.value === card.value)
+    )
+  }
+
   const handleCardClick = (card: Card, section: keyof Hand) => {
+    if (isCardUsed(card) && !hand[section].some(c => c.suit === card.suit && c.value === card.value)) {
+      return
+    }
+
     const newHand = { ...hand }
     const sectionCards = [...hand[section]]
     
@@ -37,14 +48,12 @@ export function CardSelector({ hand, onHandChange }: CardSelectorProps) {
     )
 
     if (cardIndex === -1) {
-      // Add card if section isn't full
       if (section === 'board' && sectionCards.length < 5) {
         sectionCards.push(card)
       } else if (section !== 'board' && sectionCards.length < 2) {
         sectionCards.push(card)
       }
     } else {
-      // Remove card if clicked again
       sectionCards.splice(cardIndex, 1)
     }
 
@@ -120,13 +129,15 @@ export function CardSelector({ hand, onHandChange }: CardSelectorProps) {
             {VALUES.map(value => (
               SUITS.map(suit => {
                 const card: Card = { suit, value }
+                const isUsed = isCardUsed(card)
+                const isSelected = isCardSelected(card, selectedSection)
                 return (
                   <Box
                     key={`${value}-${suit}`}
                     onClick={() => handleCardClick(card, selectedSection)}
-                    cursor="pointer"
-                    opacity={isCardSelected(card, selectedSection) ? 0.5 : 1}
-                    _hover={{ opacity: 0.7 }}
+                    cursor={isUsed && !isSelected ? "not-allowed" : "pointer"}
+                    opacity={isUsed && !isSelected ? 0.3 : isSelected ? 0.5 : 1}
+                    _hover={{ opacity: isUsed && !isSelected ? 0.3 : 0.7 }}
                   >
                     <PlayingCard card={card} />
                   </Box>
