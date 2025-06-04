@@ -1,8 +1,7 @@
 'use client'
 
 import { Box, Container, Heading, VStack } from '@chakra-ui/react'
-import { CardSelector } from '@/components/CardSelector'
-import { OddsDisplay } from '@/components/OddsDisplay'
+import { Table } from '@/components/Table'
 import { useState } from 'react'
 
 export type Card = {
@@ -16,27 +15,28 @@ export type Hand = {
   board: Card[]
 }
 
+type Player = {
+  name: string;
+  hand: Card[];
+}
+
 export default function Home() {
-  const [hand, setHand] = useState<Hand>({
-    hero: [],
-    villain: [],
-    board: []
-  })
+  const [players, setPlayers] = useState<(Player | null)[]>(Array(9).fill(null))
+
+  const handlePlayerChange = (index: number, player: Player | null) => {
+    setPlayers(prev => {
+      const updated = [...prev]
+      updated[index] = player
+      return updated
+    })
+  }
 
   return (
     <Container maxW="container.xl" py={8}>
       <VStack spacing={8}>
         <Heading>Hold'Em Odds Calculator</Heading>
-        
         <Box w="full">
-          <CardSelector
-            hand={hand}
-            onHandChange={setHand}
-          />
-        </Box>
-
-        <Box w="full">
-          <OddsDisplay hand={hand} />
+          <Table players={players} onPlayerChange={handlePlayerChange} />
         </Box>
       </VStack>
     </Container>
