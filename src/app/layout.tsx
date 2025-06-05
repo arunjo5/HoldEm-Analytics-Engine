@@ -6,7 +6,6 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'Hold\'Em Odds Calculator',
-  description: 'Calculate Texas Hold\'Em poker odds in real-time',
 }
 
 export default function RootLayout({

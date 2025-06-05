@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Button, VStack, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, VStack, HStack, Text, Flex } from '@chakra-ui/react';
 import { Card } from '@/app/page';
 import { PlayingCard } from './PlayingCard';
 
@@ -11,164 +11,230 @@ interface Player {
 interface TableProps {
   players: (Player | null)[];
   onPlayerChange: (index: number, player: Player | null) => void;
+  board: Card[];
+  onBoardChange: (cards: Card[]) => void;
 }
 
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'] as const;
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
 
-export function Table({ players, onPlayerChange }: TableProps) {
+export function Table({ players, onPlayerChange, board, onBoardChange }: TableProps) {
   const seatCount = 9;
-  const radiusX = 230;
-  const radiusY = 150;
-  const centerX = 300;
-  const centerY = 200;
-  const [activeSeat, setActiveSeat] = useState<number | null>(null);
+  const radiusX = 260;
+  const radiusY = 170;
+  const centerX = 320;
+  const centerY = 210;
+  const [selectingPlayer, setSelectingPlayer] = useState<number | null>(null);
+  const [selectedCards, setSelectedCards] = useState<Card[]>([]);
+  const [activeBoardIndex, setActiveBoardIndex] = useState<number | null>(null);
 
-  // Get all used cards
-  const usedCards = players
-    .filter(Boolean)
-    .flatMap(player => player!.hand);
+  const usedCards = [
+    ...players.filter(Boolean).flatMap(player => player!.hand),
+    ...board,
+    ...selectedCards
+  ];
 
-  const isCardUsed = (card: Card, seatIndex: number) => {
-    // Allow player to re-select their own cards
-    return usedCards.some(
-      c => c.suit === card.suit && c.value === card.value &&
-      (!players[seatIndex] || !players[seatIndex]!.hand.some(
-        h => h.suit === card.suit && h.value === card.value
-      ))
-    );
+  const isCardUsed = (card: Card, boardIndex?: number) => {
+    if (boardIndex !== undefined && board[boardIndex] && board[boardIndex].suit === card.suit && board[boardIndex].value === card.value) {
+      return false;
+    }
+    return usedCards.some(c => c.suit === card.suit && c.value === card.value);
   };
 
-  const handleCardClick = (seatIndex: number, card: Card) => {
-    const player = players[seatIndex];
-    if (!player) return;
-    const hand = [...player.hand];
-    const idx = hand.findIndex(c => c.suit === card.suit && c.value === card.value);
-    if (idx !== -1) {
-      hand.splice(idx, 1);
-    } else if (hand.length < 2 && !isCardUsed(card, seatIndex)) {
-      hand.push(card);
+  const handleBoardCardClick = (index: number) => {
+    setActiveBoardIndex(index);
+  };
+
+  const handleBoardCardSelect = (card: Card) => {
+    if (activeBoardIndex === null) return;
+    if (isCardUsed(card, activeBoardIndex)) return;
+    const newBoard = [...board];
+    newBoard[activeBoardIndex] = card;
+    onBoardChange(newBoard.filter(Boolean));
+    setActiveBoardIndex(null);
+  };
+
+  const handleAddClick = (seatIndex: number) => {
+    setSelectingPlayer(seatIndex);
+    setSelectedCards([]);
+  };
+
+  const handleCardSelectForPlayer = (card: Card) => {
+    if (isCardUsed(card)) return;
+    if (selectedCards.length < 2 && !selectedCards.some(c => c.suit === card.suit && c.value === card.value)) {
+      const newSelected = [...selectedCards, card];
+      setSelectedCards(newSelected);
+      if (newSelected.length === 2 && selectingPlayer !== null) {
+        onPlayerChange(selectingPlayer, { name: `Player ${selectingPlayer + 1}`, hand: newSelected });
+        setSelectingPlayer(null);
+        setSelectedCards([]);
+      }
     }
-    onPlayerChange(seatIndex, { ...player, hand });
+  };
+
+  const handleCancel = () => {
+    setSelectingPlayer(null);
+    setSelectedCards([]);
+    setActiveBoardIndex(null);
   };
 
   return (
-    <Box position="relative" w="600px" h="400px" mx="auto">
-      {/* Poker Table Felt */}
-      <Box
-        position="absolute"
-        left={0}
-        top={0}
-        w="600px"
-        h="400px"
-        borderRadius="200px / 130px"
-        bgGradient="linear(to-b, green.700 80%, green.900)"
-        border="12px solid #b8864b"
-        boxShadow="0 0 40px 0 #222"
-        zIndex={0}
-      />
-      {/* Seats */}
-      {Array.from({ length: seatCount }).map((_, i) => {
-        const angle = (2 * Math.PI * i) / seatCount - Math.PI / 2;
-        const x = centerX + radiusX * Math.cos(angle) - 48;
-        const y = centerY + radiusY * Math.sin(angle) - 48;
-        const player = players[i];
-        return (
-          <VStack
-            key={i}
-            position="absolute"
-            left={`${x}px`}
-            top={`${y}px`}
-            spacing={1}
-            align="center"
-            zIndex={2}
-          >
+    <Flex direction="row" justify="center" align="center" w="100%" h="100%" minH="600px" >
+      <Box position="relative" w="640px" h="420px" mx="auto" mt={-150}>   
+        <Box
+          position="absolute"
+          left={0}
+          top={0}
+          w="640px"
+          h="420px"
+          borderRadius="260px / 170px"
+          bgGradient="linear(to-b, green.700 80%, green.900)"
+          border="12px solid #b8864b"
+          boxShadow="0 0 40px 0 #222"
+          zIndex={0}
+        />
+        <HStack
+          position="absolute"
+          left="50%"
+          top="50%"
+          transform="translate(-50%, -50%)"
+          spacing={5}
+          zIndex={2}
+        >
+          {Array.from({ length: 5 }).map((_, i) => (
             <Box
-              bg="white"
-              borderRadius="lg"
+              key={i}
+              bg={activeBoardIndex === i ? 'blue.50' : 'white'}
+              borderRadius="md"
               boxShadow="md"
-              borderWidth={player ? 2 : 1}
-              borderColor={player ? 'blue.400' : 'gray.300'}
-              px={3}
-              py={2}
-              minW="90px"
-              minH="70px"
+              borderWidth={2}
+              borderColor={board[i] ? 'blue.400' : 'gray.300'}
+              w="48px"
+              h="68px"
               display="flex"
-              flexDirection="column"
               alignItems="center"
               justifyContent="center"
+              cursor="pointer"
+              onClick={() => handleBoardCardClick(i)}
+              position="relative"
             >
-              {player ? (
-                <>
+              {board[i] ? <PlayingCard card={board[i]} /> : <Text color="gray.400">+</Text>}
+            </Box>
+          ))}
+        </HStack>
+        {Array.from({ length: seatCount }).map((_, i) => {
+          const angle = (2 * Math.PI * i) / seatCount - Math.PI / 2;
+          const x = centerX + radiusX * Math.cos(angle) - 36;
+          const y = centerY + radiusY * Math.sin(angle) - 36;
+          const player = players[i];
+          return (
+            <VStack
+              key={i}
+              position="absolute"
+              left={`${x}px`}
+              top={`${y}px`}
+              spacing={3}
+              align="center"
+              zIndex={2}
+            >
+              <Box
+                bg="white"
+                borderRadius="lg"
+                boxShadow="md"
+                borderWidth={player ? 2 : 1}
+                borderColor={player ? 'blue.400' : 'gray.300'}
+                px={2}
+                py={1}
+                minW="60px"
+                minH="45px"
+                display="flex"
+                flexDirection="column"
+                alignItems="center"
+                justifyContent="center"
+              >
+                {player ? (
                   <HStack mb={1}>
                     {player.hand.map((card, idx) => (
                       <PlayingCard key={idx} card={card} />
                     ))}
                   </HStack>
-                  <Button size="xs" colorScheme="blue" mb={1} onClick={() => setActiveSeat(i)}>
-                    {player.hand.length < 2 ? 'Pick Cards' : 'Edit Cards'}
-                  </Button>
-                  <Button size="xs" colorScheme="red" variant="outline" onClick={() => onPlayerChange(i, null)}>
-                    Remove
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  borderRadius="md"
-                  borderColor="gray.400"
-                  borderWidth={2}
-                  boxShadow="sm"
-                  bg="white"
-                  color="gray.700"
-                  _hover={{ bg: 'gray.100', borderColor: 'blue.400' }}
-                  onClick={() => onPlayerChange(i, { name: `Player ${i + 1}`, hand: [] })}
-                >
-                  + Add
-                </Button>
-              )}
-            </Box>
-            <Text fontSize="sm" color="white" fontWeight="bold" mt={1} textShadow="0 1px 4px #222">
-              {player ? player.name : `Player ${i + 1}`}
-            </Text>
-            {/* Card Picker */}
-            {activeSeat === i && player && (
-              <Box bg="white" p={2} borderRadius="md" boxShadow="lg" zIndex={10} mt={2} minW="320px">
-                <HStack spacing={1} wrap="wrap" flexWrap="wrap">
-                  {VALUES.map(value =>
-                    SUITS.map(suit => {
-                      const card: Card = { suit, value };
-                      const selected = player.hand.some(
-                        c => c.suit === card.suit && c.value === card.value
-                      );
-                      const used = isCardUsed(card, i);
-                      return (
-                        <Box
-                          key={`${value}-${suit}`}
-                          onClick={() => handleCardClick(i, card)}
-                          cursor={used && !selected ? 'not-allowed' : 'pointer'}
-                          opacity={used && !selected ? 0.3 : selected ? 0.5 : 1}
-                          _hover={{ opacity: used && !selected ? 0.3 : 0.7 }}
-                        >
-                          <PlayingCard card={card} />
-                        </Box>
-                      );
-                    })
-                  )}
-                </HStack>
-                <Button size="xs" mt={2} onClick={() => setActiveSeat(null)}>
-                  Done
-                </Button>
+                ) : (
+                  selectingPlayer === i ? (
+                    <>
+                      <Text fontSize="sm" color="gray.700" mb={2} fontWeight="bold">Select 2 cards</Text>
+                      <HStack>
+                        {selectedCards.map((card, idx) => (
+                          <PlayingCard key={idx} card={card} />
+                        ))}
+                      </HStack>
+                      <Button size="xs" mt={2} colorScheme="gray" onClick={handleCancel}>Cancel</Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      borderRadius="md"
+                      borderColor="gray.400"
+                      borderWidth={2}
+                      boxShadow="sm"
+                      bg="white"
+                      color="gray.700"
+                      _hover={{ bg: 'gray.100', borderColor: 'blue.400' }}
+                      onClick={() => handleAddClick(i)}
+                    >
+                      + Add
+                    </Button>
+                  )
+                )}
               </Box>
-            )}
-          </VStack>
-        );
-      })}
-      {/* Table label */}
-      <Box position="absolute" left="50%" top="50%" transform="translate(-50%, -50%)" color="white" fontWeight="bold" fontSize="2xl" zIndex={1} textShadow="0 2px 8px #222">
-        Poker Table
+              <Text fontSize="sm" color="white" fontWeight="bold" mt={1} textShadow="0 1px 4px #222">
+                {player ? player.name : `Player ${i + 1}`}
+              </Text>
+            </VStack>
+          );
+        })}
       </Box>
-    </Box>
+      <Box ml={8} p={3} bg="white" borderRadius="lg" boxShadow="md" minW="180px" maxW="180px" maxH="700px" overflowY="hidden" display="flex" flexDirection="column" alignItems="center" mt={-100}>
+        <Box display="grid" gridTemplateColumns="repeat(4, 1fr)" gridTemplateRows="repeat(13, 1fr)" gap={1} pt={1}>
+          {VALUES.map((value, rowIdx) =>
+            SUITS.map((suit, colIdx) => {
+              const card: Card = { suit, value };
+              const used = isCardUsed(card);
+              const isSelectable = (
+                (selectingPlayer !== null && !used && (!selectedCards.some(c => c.suit === card.suit && c.value === card.value)) && selectedCards.length < 2)
+                || (activeBoardIndex !== null && !used)
+              );
+              return (
+                <Box
+                  key={`${value}-${suit}`}
+                  w="32px"
+                  h="45px"
+                  borderRadius="md"
+                  borderWidth={2}
+                  borderColor={used ? 'gray.400' : 'gray.300'}
+                  bg={used ? 'gray.100' : 'white'}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  opacity={used ? 0.4 : isSelectable ? 1 : 0.7}
+                  m={0}
+                  p={0}
+                  cursor={isSelectable ? 'pointer' : 'not-allowed'}
+                  onClick={() => {
+                    if (selectingPlayer !== null && isSelectable) handleCardSelectForPlayer(card);
+                    if (activeBoardIndex !== null && isSelectable) handleBoardCardSelect(card);
+                  }}
+                >
+                  <PlayingCard card={card} />
+                </Box>
+              );
+            })
+          )}
+        </Box>
+        {(activeBoardIndex !== null) && (
+          <Button size="xs" mt={2} colorScheme="gray" onClick={handleCancel}>Cancel</Button>
+        )}
+      </Box>
+    </Flex>
   );
 } 

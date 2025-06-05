@@ -22,6 +22,7 @@ type Player = {
 
 export default function Home() {
   const [players, setPlayers] = useState<(Player | null)[]>(Array(9).fill(null))
+  const [board, setBoard] = useState<Card[]>([])
 
   const handlePlayerChange = (index: number, player: Player | null) => {
     setPlayers(prev => {
@@ -31,12 +32,16 @@ export default function Home() {
     })
   }
 
+  const handleBoardChange = (cards: Card[]) => {
+    setBoard(cards)
+  }
+
   return (
     <Container maxW="container.xl" py={8}>
       <VStack spacing={8}>
         <Heading>Hold'Em Odds Calculator</Heading>
         <Box w="full">
-          <Table players={players} onPlayerChange={handlePlayerChange} />
+          <Table players={players} onPlayerChange={handlePlayerChange} board={board} onBoardChange={handleBoardChange} />
         </Box>
       </VStack>
     </Container>
