@@ -2,6 +2,7 @@
 
 import { Box, Container, Heading, VStack } from '@chakra-ui/react'
 import { Table } from '@/components/Table'
+import { PlayerOddsDisplay } from '@/components/PlayerOddsDisplay'
 import { useState } from 'react'
 
 export type Card = {
@@ -42,6 +43,7 @@ export default function Home() {
         <Heading>Hold'Em Odds Calculator</Heading>
         <Box w="full">
           <Table players={players} onPlayerChange={handlePlayerChange} board={board} onBoardChange={handleBoardChange} />
+          <PlayerOddsDisplay players={players} board={board} />
         </Box>
       </VStack>
     </Container>

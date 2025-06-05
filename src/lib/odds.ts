@@ -1,5 +1,10 @@
 import { Card, Hand } from '@/app/page'
 
+type Player = {
+  name: string;
+  hand: Card[];
+}
+
 const SUITS = ['hearts', 'diamonds', 'clubs', 'spades'] as const
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const
 
@@ -205,4 +210,65 @@ export async function calculateOdds(hand: Hand): Promise<{ hero: number; villain
     villain: (villainWins / SIMULATIONS) * 100,
     tie: (ties / SIMULATIONS) * 100
   }
+}
+
+export type PlayerOdds = {
+  [key: string]: number;
+  tie: number;
+}
+
+export async function calculateMultiPlayerOdds(players: (Player | null)[], board: Card[]): Promise<PlayerOdds> {
+  const SIMULATIONS = 1000;
+  const activePlayers = players.filter((p): p is Player => p !== null && p.hand.length === 2);
+  if (activePlayers.length === 0) return { tie: 100 };
+
+  const results: PlayerOdds = { tie: 0 };
+  activePlayers.forEach(player => results[player.name] = 0);
+
+  for (let i = 0; i < SIMULATIONS; i++) {
+    const remainingCards = createDeck().filter(
+      card => !board.some(b => b.suit === card.suit && b.value === card.value) &&
+              !activePlayers.some(p => p.hand.some((h: Card) => h.suit === card.suit && h.value === card.value))
+    );
+    const shuffled = shuffleDeck(remainingCards);
+    
+    const completeBoard = [...board];
+    while (completeBoard.length < 5) {
+      completeBoard.push(shuffled.pop()!);
+    }
+
+    const playerHands = activePlayers.map(player => ({
+      name: player.name,
+      rank: evaluateHand([...player.hand, ...completeBoard])
+    }));
+
+    // sorts by hand rank
+    playerHands.sort((a, b) => {
+      if (a.rank.rank !== b.rank.rank) return b.rank.rank - a.rank.rank;
+      for (let i = 0; i < a.rank.value.length; i++) {
+        if (a.rank.value[i] !== b.rank.value[i]) return b.rank.value[i] - a.rank.value[i];
+      }
+      return 0;
+    });
+
+    // checks for ties
+    const bestRank = playerHands[0].rank;
+    const winners = playerHands.filter(p => 
+      p.rank.rank === bestRank.rank && 
+      p.rank.value.every((v, i) => v === bestRank.value[i])
+    );
+
+    if (winners.length > 1) {
+      results.tie += winners.length;
+    } else {
+      results[winners[0].name]++;
+    }
+  }
+
+  // Convert to percentages
+  Object.keys(results).forEach(key => {
+    results[key] = (results[key] / SIMULATIONS) * 100;
+  });
+
+  return results;
 } 
