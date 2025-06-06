@@ -38,6 +38,7 @@ export function PlayerOddsDisplay({ players, board }: PlayerOddsDisplayProps) {
   const [odds, setOdds] = useState<PlayerOdds>({ tie: 100 });
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const textColor = useColorModeValue('gray.800', 'white');
 
   useEffect(() => {
     const calculateAndUpdateOdds = async () => {
@@ -51,15 +52,15 @@ export function PlayerOddsDisplay({ players, board }: PlayerOddsDisplayProps) {
   const activePlayers = players.filter((p): p is Player => p !== null && p.hand.length === 2);
 
   return (
-    <Box p={4} bg={bgColor} borderRadius="lg" borderWidth={1} borderColor={borderColor} w="full" maxW="800px" mx="auto" mt={-40} ml={100}>
+    <Box p={4} bg={bgColor} borderRadius="lg" borderWidth={1} borderColor={borderColor} w="full" maxW="800px" mx="auto" color={textColor}>
       <VStack spacing={3} align="stretch">
-        <Text fontSize="xl" fontWeight="bold" textAlign="center">Win Probabilities</Text>
+        <Text fontSize="xl" fontWeight="bold" textAlign="center" color={textColor}>Win Probabilities</Text>
         
         {activePlayers.map((player, index) => (
           <VStack key={player.name} spacing={1} align="stretch">
             <HStack justify="space-between">
-              <Text>{player.name}</Text>
-              <Text fontWeight="bold">{odds[player.name]?.toFixed(1)}%</Text>
+              <Text color={textColor}>{player.name}</Text>
+              <Text fontWeight="bold" color={textColor}>{odds[player.name]?.toFixed(1)}%</Text>
             </HStack>
             <Progress
               value={odds[player.name] || 0}
@@ -72,8 +73,8 @@ export function PlayerOddsDisplay({ players, board }: PlayerOddsDisplayProps) {
 
         <VStack spacing={1} align="stretch">
           <HStack justify="space-between">
-            <Text>Tie</Text>
-            <Text fontWeight="bold">{odds.tie.toFixed(1)}%</Text>
+            <Text color={textColor}>Tie</Text>
+            <Text fontWeight="bold" color={textColor}>{odds.tie.toFixed(1)}%</Text>
           </HStack>
           <Progress
             value={odds.tie}

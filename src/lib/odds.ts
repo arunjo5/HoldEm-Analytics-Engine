@@ -175,7 +175,7 @@ function compareHands(heroRank: HandRank, villainRank: HandRank): number {
 }
 
 export async function calculateOdds(hand: Hand): Promise<{ hero: number; villain: number; tie: number }> {
-  const SIMULATIONS = 1000
+  const SIMULATIONS = 10000
   let heroWins = 0
   let villainWins = 0
   let ties = 0
@@ -218,7 +218,7 @@ export type PlayerOdds = {
 }
 
 export async function calculateMultiPlayerOdds(players: (Player | null)[], board: Card[]): Promise<PlayerOdds> {
-  const SIMULATIONS = 1000;
+  const SIMULATIONS = 10000;
   const activePlayers = players.filter((p): p is Player => p !== null && p.hand.length === 2);
   if (activePlayers.length === 0) return { tie: 100 };
 

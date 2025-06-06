@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Button, VStack, HStack, Text, Flex } from '@chakra-ui/react';
+import { Box, Button, VStack, HStack, Text, Flex, useColorModeValue } from '@chakra-ui/react';
 import { Card } from '@/app/page';
 import { PlayingCard } from './PlayingCard';
 
@@ -79,8 +79,8 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
   };
 
   return (
-    <Flex direction="row" justify="center" align="center" w="100%" h="100%" minH="600px" >
-      <Box position="relative" w="640px" h="420px" mx="auto" mt={-150}>   
+    <Flex direction="row" justify="center" align="center" w="auto" h="100%" minH="600px">
+      <Box position="relative" w="640px" h="420px" mx="auto" mt={-150} flexShrink={0}>   
         <Box
           position="absolute"
           left={0}
@@ -167,7 +167,16 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
                           <PlayingCard key={idx} card={card} />
                         ))}
                       </HStack>
-                      <Button size="xs" mt={2} colorScheme="gray" onClick={handleCancel}>Cancel</Button>
+                      <Button
+                        size="xs"
+                        mt={2}
+                        bg={useColorModeValue('gray.200', 'gray.700')}
+                        color={useColorModeValue('gray.800', 'white')}
+                        _hover={{ bg: useColorModeValue('gray.300', 'gray.600') }}
+                        onClick={handleCancel}
+                      >
+                        Cancel
+                      </Button>
                     </>
                   ) : (
                     <Button
@@ -194,7 +203,7 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
           );
         })}
       </Box>
-      <Box ml={8} p={3} bg="white" borderRadius="lg" boxShadow="md" minW="180px" maxW="180px" maxH="700px" overflowY="hidden" display="flex" flexDirection="column" alignItems="center" mt={-100}>
+      <Box  ml={8} p={5} mt={-100} bg="white" borderRadius="lg" boxShadow="md" minW="180px" maxW="180px" maxH="800px" overflowY="hidden" display="flex" flexDirection="column" alignItems="center">
         <Box display="grid" gridTemplateColumns="repeat(4, 1fr)" gridTemplateRows="repeat(13, 1fr)" gap={1} pt={1}>
           {VALUES.map((value, rowIdx) =>
             SUITS.map((suit, colIdx) => {
@@ -232,7 +241,16 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
           )}
         </Box>
         {(activeBoardIndex !== null) && (
-          <Button size="xs" mt={2} colorScheme="gray" onClick={handleCancel}>Cancel</Button>
+          <Button
+            size="xs"
+            mt={2}
+            bg={useColorModeValue('gray.200', 'gray.700')}
+            color={useColorModeValue('gray.800', 'white')}
+            _hover={{ bg: useColorModeValue('gray.300', 'gray.600') }}
+            onClick={handleCancel}
+          >
+            Cancel
+          </Button>
         )}
       </Box>
     </Flex>

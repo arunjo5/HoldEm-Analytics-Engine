@@ -28,8 +28,8 @@ export function PlayingCard({ card }: PlayingCardProps) {
 
   return (
     <Box
-      w="60px"
-      h="90px"
+      w="80px"
+      h="100px"
       bg="white"
       borderRadius="md"
       borderWidth={1}
