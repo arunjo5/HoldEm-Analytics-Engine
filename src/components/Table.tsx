@@ -88,10 +88,23 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
           w="640px"
           h="420px"
           borderRadius="260px / 170px"
-          bgGradient="linear(to-b, green.700 80%, green.900)"
-          border="12px solid #b8864b"
-          boxShadow="0 0 40px 0 #222"
+          bgGradient="linear(to-b, poker.felt 80%, poker.feltDark)"
+          border="12px solid"
+          borderColor="poker.feltBorder"
+          boxShadow="
+            0 0 40px 0 rgba(0,0,0,0.3),
+            inset 0 0 60px 0 rgba(0,0,0,0.2),
+            0 0 0 2px poker.feltBorderDark
+          "
           zIndex={0}
+          transition="all 0.3s ease-in-out"
+          _hover={{
+            boxShadow: `
+              0 0 50px 0 rgba(0,0,0,0.4),
+              inset 0 0 70px 0 rgba(0,0,0,0.3),
+              0 0 0 2px poker.feltBorderDark
+            `
+          }}
         />
         <HStack
           position="absolute"
@@ -151,6 +164,12 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
                 flexDirection="column"
                 alignItems="center"
                 justifyContent="center"
+                transition="all 0.2s ease-in-out"
+                _hover={{
+                  transform: 'translateY(-2px)',
+                  boxShadow: 'lg',
+                  borderColor: player ? 'blue.500' : 'gray.400'
+                }}
               >
                 {player ? (
                   <HStack mb={1}>
@@ -196,14 +215,44 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
                   )
                 )}
               </Box>
-              <Text fontSize="sm" color="white" fontWeight="bold" mt={1} textShadow="0 1px 4px #222">
+              <Text 
+                fontSize="sm" 
+                color="white" 
+                fontWeight="bold" 
+                mt={1} 
+                textShadow="0 2px 4px rgba(0,0,0,0.3)"
+                transition="all 0.2s ease-in-out"
+                _hover={{
+                  transform: 'scale(1.05)',
+                  textShadow: '0 2px 6px rgba(0,0,0,0.4)'
+                }}
+              >
                 {player ? player.name : `Player ${i + 1}`}
               </Text>
             </VStack>
           );
         })}
       </Box>
-      <Box  ml={8} p={5} mt={-100} bg="white" borderRadius="lg" boxShadow="md" minW="180px" maxW="180px" maxH="800px" overflowY="hidden" display="flex" flexDirection="column" alignItems="center">
+      <Box  
+        ml={8} 
+        p={5} 
+        mt={-100} 
+        bg="white" 
+        borderRadius="lg" 
+        boxShadow="xl" 
+        minW="180px" 
+        maxW="180px" 
+        maxH="800px" 
+        overflowY="hidden" 
+        display="flex" 
+        flexDirection="column" 
+        alignItems="center"
+        transition="all 0.3s ease-in-out"
+        _hover={{
+          boxShadow: '2xl',
+          transform: 'translateY(-2px)'
+        }}
+      >
         <Box display="grid" gridTemplateColumns="repeat(4, 1fr)" gridTemplateRows="repeat(13, 1fr)" gap={1} pt={1}>
           {VALUES.map((value, rowIdx) =>
             SUITS.map((suit, colIdx) => {
@@ -229,6 +278,13 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
                   m={0}
                   p={0}
                   cursor={isSelectable ? 'pointer' : 'not-allowed'}
+                  transition="all 0.2s ease-in-out"
+                  _hover={isSelectable ? {
+                    transform: 'translateY(-2px)',
+                    boxShadow: 'md',
+                    borderColor: 'blue.400',
+                    opacity: 1
+                  } : {}}
                   onClick={() => {
                     if (selectingPlayer !== null && isSelectable) handleCardSelectForPlayer(card);
                     if (activeBoardIndex !== null && isSelectable) handleBoardCardSelect(card);

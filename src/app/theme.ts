@@ -14,6 +14,13 @@ export const theme = extendTheme({
       800: '#075985',
       900: '#0c4a6e',
     },
+    poker: {
+      felt: '#1B4D3E',
+      feltDark: '#0F2E24',
+      feltLight: '#2A7D5F',
+      feltBorder: '#B8864B',
+      feltBorderDark: '#8B6B3D',
+    }
   },
   styles: {
     global: {
@@ -25,9 +32,58 @@ export const theme = extendTheme({
   },
   components: {
     Button: {
+      baseStyle: {
+        fontWeight: 'semibold',
+        borderRadius: 'md',
+        transition: 'all 0.2s',
+      },
+      variants: {
+        solid: {
+          bg: 'brand.500',
+          color: 'white',
+          _hover: {
+            bg: 'brand.600',
+            transform: 'translateY(-1px)',
+            boxShadow: 'lg',
+          },
+          _active: {
+            bg: 'brand.700',
+            transform: 'translateY(0)',
+          },
+        },
+        outline: {
+          borderWidth: '2px',
+          _hover: {
+            bg: 'brand.50',
+            borderColor: 'brand.500',
+            color: 'brand.500',
+          },
+        },
+      },
       defaultProps: {
         colorScheme: 'brand',
       },
     },
+    Progress: {
+      baseStyle: {
+        track: {
+          bg: 'gray.100',
+          borderRadius: 'full',
+        },
+        filledTrack: {
+          borderRadius: 'full',
+          transition: 'all 0.3s ease-in-out',
+        },
+      },
+    },
+    Box: {
+      baseStyle: {
+        transition: 'all 0.2s',
+      },
+    },
+  },
+  config: {
+    initialColorMode: 'light',
+    useSystemColorMode: true,
   },
 }) 
