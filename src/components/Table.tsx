@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Box, Button, VStack, HStack, Text, Flex, useColorModeValue } from '@chakra-ui/react';
+import { Box, Button, VStack, HStack, Text, Flex, useColorModeValue, IconButton, Tooltip } from '@chakra-ui/react';
 import { Card } from '@/app/page';
 import { PlayingCard } from './PlayingCard';
+import { CloseIcon } from '@chakra-ui/icons';
 
 interface Player {
   name: string;
@@ -20,8 +21,8 @@ const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
 
 export function Table({ players, onPlayerChange, board, onBoardChange }: TableProps) {
   const seatCount = 9;
-  const radiusX = 260;
-  const radiusY = 170;
+  const radiusX = 330;
+  const radiusY = 190;
   const centerX = 320;
   const centerY = 210;
   const [selectingPlayer, setSelectingPlayer] = useState<number | null>(null);
@@ -78,9 +79,13 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
     setActiveBoardIndex(null);
   };
 
+  const handleRemovePlayer = (seatIndex: number) => {
+    onPlayerChange(seatIndex, null);
+  };
+
   return (
     <Flex direction="row" justify="center" align="center" w="auto" h="100%" minH="600px">
-      <Box position="relative" w="640px" h="420px" mx="auto" mt={-150} flexShrink={0}>   
+      <Box position="relative" w="840px" h="420px" mx="auto" mt={-150} flexShrink={0}>   
         <Box
           position="absolute"
           left={0}
@@ -108,7 +113,7 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
         />
         <HStack
           position="absolute"
-          left="50%"
+          left="45%"
           top="50%"
           transform="translate(-50%, -50%)"
           spacing={5}
@@ -172,11 +177,27 @@ export function Table({ players, onPlayerChange, board, onBoardChange }: TablePr
                 }}
               >
                 {player ? (
-                  <HStack mb={1}>
-                    {player.hand.map((card, idx) => (
-                      <PlayingCard key={idx} card={card} />
-                    ))}
-                  </HStack>
+                  <VStack spacing={1}>
+                    <HStack>
+                      {player.hand.map((card, idx) => (
+                        <PlayingCard key={idx} card={card} />
+                      ))}
+                    </HStack>
+                    <Tooltip label="Remove player" placement="top">
+                      <IconButton
+                        size="xs"
+                        icon={<CloseIcon />}
+                        aria-label="Remove player"
+                        colorScheme="red"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePlayer(i);
+                        }}
+                        _hover={{ bg: 'red.100' }}
+                      />
+                    </Tooltip>
+                  </VStack>
                 ) : (
                   selectingPlayer === i ? (
                     <>
