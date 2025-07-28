@@ -48,7 +48,6 @@ function getRemainingCards(hand: Hand): Card[] {
 }
 
 function evaluateHand(cards: Card[]): HandRank {
-  const sortedCards = [...cards].sort((a, b) => VALUE_RANK[b.value] - VALUE_RANK[a.value])
   
   // counts occurrences of each value
   const valueCounts: { [key: string]: number } = {}
