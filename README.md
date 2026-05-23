@@ -2,7 +2,7 @@
 
 #### **[▶ Click to visit](https://holdemanalytics.vercel.app/)** 
 
-#### Calculates the win probabilites of players given their cards and/or the community cards
+#### Texas Hold'Em analytics platform for hand equity, range vs. range equity, and pot odds.
 
 <img width="1200" alt="Screenshot 2026-05-23 at 6 44 05 PM" src="https://github.com/user-attachments/assets/2e0ecbcb-5038-46c4-b11c-f137058940dd" />
 
