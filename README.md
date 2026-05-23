@@ -1,6 +1,6 @@
 ## Hold'Em Analytics Engine
 
-#### **[▶ Click to visit](https://holdemcalculator.vercel.app/)** 
+#### **[▶ Click to visit](https://holdemanalytics.vercel.app/)** 
 
 #### Calculates the win probabilites of players given their cards and/or the community cards
 
