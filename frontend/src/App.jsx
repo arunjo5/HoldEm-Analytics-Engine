@@ -31,6 +31,7 @@ export default function App() {
   const [results, setResults] = useState({ perPlayer: {}, sims: 0 });
   const [calculating, setCalculating] = useState(false);
   const calcVersion = useRef(0);
+  const inFlightWorkersRef = useRef([]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', theme === 'light');
@@ -51,14 +52,61 @@ export default function App() {
     const active = players.some(p => p && ((p.kind === 'hand' && p.hand.length === 2) || (p.kind === 'range' && p.range.length > 0)));
     if (!active || !validBoard) { setResults({ perPlayer: {}, sims: 0 }); setCalculating(false); return; }
     setCalculating(true);
+
+    // Kill any workers still chewing on the previous calc.
+    inFlightWorkersRef.current.forEach(w => w.terminate());
+    inFlightWorkersRef.current = [];
+
     const t = setTimeout(() => {
-      const r = PokerEngine.calculate(players, board, { sims: 4000 });
-      if (myVer === calcVersion.current) {
-        setResults(r);
-        setCalculating(false);
+      if (myVer !== calcVersion.current) return;
+
+      const TOTAL_SIMS = 100000;
+      const N = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 8));
+      const perWorker = Math.ceil(TOTAL_SIMS / N);
+
+      const workers = [];
+      const promises = [];
+      for (let i = 0; i < N; i++) {
+        const worker = new Worker(new URL('./equityWorker.js', import.meta.url), { type: 'module' });
+        workers.push(worker);
+        promises.push(new Promise(resolve => {
+          worker.onmessage = (e) => resolve(e.data);
+        }));
+        worker.postMessage({ players, board, sims: perWorker, jobId: myVer });
       }
+      inFlightWorkersRef.current = workers;
+
+      Promise.all(promises).then(results => {
+        workers.forEach(w => w.terminate());
+        if (myVer !== calcVersion.current) return;
+
+        const aggWins = {}, aggTies = {};
+        let aggValid = 0;
+        for (const r of results) {
+          aggValid += r.valid;
+          for (const idx of Object.keys(r.wins)) {
+            aggWins[idx] = (aggWins[idx] || 0) + r.wins[idx];
+            aggTies[idx] = (aggTies[idx] || 0) + r.ties[idx];
+          }
+        }
+        const perPlayer = {};
+        for (const idx of Object.keys(aggWins)) {
+          perPlayer[idx] = {
+            win: aggValid ? (aggWins[idx] / aggValid) * 100 : 0,
+            tie: aggValid ? (aggTies[idx] / aggValid) * 100 : 0,
+            equity: aggValid ? ((aggWins[idx] + aggTies[idx] * 0.5) / aggValid) * 100 : 0,
+          };
+        }
+        setResults({ perPlayer, sims: aggValid });
+        setCalculating(false);
+      });
     }, 30);
-    return () => clearTimeout(t);
+
+    return () => {
+      clearTimeout(t);
+      inFlightWorkersRef.current.forEach(w => w.terminate());
+      inFlightWorkersRef.current = [];
+    };
   }, [players, board, validBoard]);
 
   function openPicker(seatIdx) {

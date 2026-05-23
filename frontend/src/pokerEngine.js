@@ -112,8 +112,8 @@ export function expandRange(keys) {
 
 // players: [{ kind, hand?, range? }]
 // board: Card[]
-export function calculate(players, board, opts = {}) {
-  const sims = opts.sims || 4000;
+// Returns raw counts so caller can aggregate (e.g. across workers).
+export function simulate(players, board, sims) {
   const active = [];
   players.forEach((p, idx) => {
     if (!p) return;
@@ -123,7 +123,7 @@ export function calculate(players, board, opts = {}) {
       active.push({ idx, kind: 'range', combos: expandRange(p.range) });
     }
   });
-  if (active.length === 0) return { perPlayer: {}, sims: 0 };
+  if (active.length === 0) return { wins: {}, ties: {}, valid: 0 };
 
   const wins = {}, ties = {};
   active.forEach(a => { wins[a.idx] = 0; ties[a.idx] = 0; });
@@ -177,13 +177,21 @@ export function calculate(players, board, opts = {}) {
     valid++;
   }
 
+  return { wins, ties, valid };
+}
+
+// Convenience: run sims on the calling thread and return percentages.
+// Workers call `simulate` directly so counts can be aggregated.
+export function calculate(players, board, opts = {}) {
+  const sims = opts.sims || 100000;
+  const { wins, ties, valid } = simulate(players, board, sims);
   const perPlayer = {};
-  active.forEach(a => {
-    perPlayer[a.idx] = {
-      win: valid ? (wins[a.idx] / valid) * 100 : 0,
-      tie: valid ? (ties[a.idx] / valid) * 100 : 0,
-      equity: valid ? ((wins[a.idx] + ties[a.idx] * 0.5) / valid) * 100 : 0,
+  for (const idx of Object.keys(wins)) {
+    perPlayer[idx] = {
+      win: valid ? (wins[idx] / valid) * 100 : 0,
+      tie: valid ? (ties[idx] / valid) * 100 : 0,
+      equity: valid ? ((wins[idx] + ties[idx] * 0.5) / valid) * 100 : 0,
     };
-  });
+  }
   return { perPlayer, sims: valid };
 }
