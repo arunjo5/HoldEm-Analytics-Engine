@@ -1,6 +1,6 @@
-# Hold'Em Odds Calculator with Authentication
+# Hold'Em Analytics Engine — Backend
 
-A poker odds calculator with Google Sign-In authentication and search history functionality.
+Auth + persistence service for the Hold'Em Analytics Engine. Google Sign-In and saved search history.
 
 ## Features
 
@@ -108,16 +108,6 @@ src/
 └── types/                  # TypeScript type definitions
     └── next-auth.d.ts     # NextAuth type extensions
 ```
-
-## Technologies Used
-
-- **Next.js 14** - React framework with App Router
-- **NextAuth.js** - Authentication library
-- **Prisma** - Database ORM
-- **PostgreSQL** - Database
-- **Chakra UI** - Component library
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Utility-first CSS
 
 ## API Endpoints
 

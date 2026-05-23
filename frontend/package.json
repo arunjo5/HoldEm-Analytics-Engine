@@ -1,9 +1,9 @@
 {
-  "name": "equity-engine",
+  "name": "holdem-analytics-engine",
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Texas Hold'em equity calculator (Monte Carlo)",
+  "description": "Texas Hold'em analytics engine (Monte Carlo equity, ranges, pot odds)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

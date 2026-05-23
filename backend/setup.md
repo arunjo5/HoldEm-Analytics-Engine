@@ -1,4 +1,4 @@
-# Setup Guide for Hold'Em Odds Calculator Authentication
+# Hold'Em Analytics Engine — Setup Guide
 
 ## Prerequisites
 

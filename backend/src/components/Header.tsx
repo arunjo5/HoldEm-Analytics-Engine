@@ -56,7 +56,7 @@ export function Header() {
               bgClip="text"
               fontWeight="bold"
             >
-              Hold&apos;Em Odds Calculator
+              Hold&apos;Em Analytics Engine
             </Heading>
           </HStack>
           

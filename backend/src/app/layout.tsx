@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Hold\'Em Odds Calculator',
+  title: 'Hold\'Em Analytics Engine',
 }
 
 export default function RootLayout({

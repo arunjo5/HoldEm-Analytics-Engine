@@ -1,6 +1,6 @@
-# Equity Engine, Frontend
+# Hold'Em Analytics Engine — Frontend
 
-Texas Hold'em equity calculator with Monte Carlo simulation, range analysis, and pot odds.
+Texas Hold'em analytics engine with Monte Carlo simulation, range analysis, and pot odds.
 
 ## Stack
 
@@ -40,11 +40,3 @@ frontend/
     ├── Pickers.jsx         CardPicker (52-card grid) + RangePicker (13x13)
     └── Seat.jsx            PlayerSeat + RangeMini thumbnail
 ```
-
-## Adding authentication later
-
-The current app is fully client-side. Options for adding user accounts and persistence:
-
-- Supabase: drop-in OAuth (Google, GitHub, etc.) plus a Postgres database with row-level security.
-- Clerk or Auth0: if you only need auth, not a database.
-- Storing user hand histories or saved ranges would live behind a `/api/*` route. Vercel / Netlify edge functions or a small Node service both work.
