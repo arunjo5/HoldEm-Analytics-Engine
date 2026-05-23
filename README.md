@@ -1,18 +1,12 @@
-## Poker Odds Calculator
-#### https://hold-em-calculator.vercel.app/
+## Hold'Em Analytics Engine
+
+#### **[▶ Click to visit](https://holdemcalculator.vercel.app/)** 
+
 #### Calculates the win probabilites of players given their cards and/or the community cards
 
-<img width="1287" height="717" alt="Screenshot 2025-07-28 at 2 16 54 PM" src="https://github.com/user-attachments/assets/3bb7a7bb-590c-422f-ae0b-ba9fa88cb93a" />
+<img width="1200" alt="Screenshot 2026-05-23 at 6 44 05 PM" src="https://github.com/user-attachments/assets/2e0ecbcb-5038-46c4-b11c-f137058940dd" />
 
-## Repo layout
-
-```
-.
-├── frontend/   Vite + React app (the calculator UI)
-└── backend/    Next.js app — NextAuth + Prisma (API, auth, DB)
-```
-
-## Quick start
+## Quick start guide
 
 ```bash
 # Frontend (Vite + React)
