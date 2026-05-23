@@ -1,6 +1,12 @@
-import { extendTheme } from '@chakra-ui/react'
+import { extendTheme, type ThemeConfig } from '@chakra-ui/react'
+
+const config: ThemeConfig = {
+  initialColorMode: 'light',
+  useSystemColorMode: false,
+}
 
 export const theme = extendTheme({
+  config,
   colors: {
     brand: {
       50: '#f0f9ff',
@@ -23,12 +29,12 @@ export const theme = extendTheme({
     }
   },
   styles: {
-    global: {
+    global: (props: any) => ({
       body: {
-        bg: 'gray.50',
-        color: 'gray.800',
+        bg: props.colorMode === 'dark' ? 'gray.900' : 'gray.50',
+        color: props.colorMode === 'dark' ? 'white' : 'gray.800',
       },
-    },
+    }),
   },
   components: {
     Button: {
@@ -81,9 +87,5 @@ export const theme = extendTheme({
         transition: 'all 0.2s',
       },
     },
-  },
-  config: {
-    initialColorMode: 'light',
-    useSystemColorMode: true,
   },
 }) 
