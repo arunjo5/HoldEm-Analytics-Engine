@@ -1,10 +1,13 @@
-// Poker engine: deck, 7-card hand evaluation, Monte Carlo equity.
-
 export const SUITS = ['s', 'h', 'd', 'c'];
 export const VALUES = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
 export const RANK = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14 };
 
-function cardId(c) { return c.v + c.s; }
+const SUIT_INDEX = { s:0, h:1, d:2, c:3 };
+const VALUE_INDEX = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'T':8,'J':9,'Q':10,'K':11,'A':12 };
+
+function cardToId(c) {
+  return VALUE_INDEX[c.v] * 4 + SUIT_INDEX[c.s];
+}
 
 export function makeDeck() {
   const d = [];
@@ -12,81 +15,6 @@ export function makeDeck() {
   return d;
 }
 
-function shuffleTail(arr, k) {
-  const stop = Math.max(0, arr.length - k);
-  for (let i = arr.length - 1; i >= stop; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
-
-// Evaluate up to 7 cards into an integer score (higher wins).
-// Layout: rank(4 bits) << 20 | tiebreakers.
-function evaluate(cards) {
-  const vcount = new Array(15).fill(0);
-  const scount = { s:0,h:0,d:0,c:0 };
-  const sCards = { s:[],h:[],d:[],c:[] };
-  for (const c of cards) {
-    const r = RANK[c.v];
-    vcount[r]++;
-    scount[c.s]++;
-    sCards[c.s].push(r);
-  }
-  let flushSuit = null;
-  for (const s of SUITS) if (scount[s] >= 5) { flushSuit = s; break; }
-  if (flushSuit) {
-    const ranks = [...new Set(sCards[flushSuit])].sort((a,b)=>b-a);
-    if (ranks.includes(14)) ranks.push(1); // wheel
-    for (let i = 0; i <= ranks.length - 5; i++) {
-      if (ranks[i] - ranks[i+4] === 4) return (8 << 20) | (ranks[i] << 16);
-    }
-  }
-  const groups = [];
-  for (let r = 14; r >= 2; r--) if (vcount[r]) groups.push([vcount[r], r]);
-  groups.sort((a,b)=> b[0]-a[0] || b[1]-a[1]);
-  if (groups[0][0] === 4) {
-    const quad = groups[0][1];
-    let kicker = 0;
-    for (let r = 14; r >= 2; r--) if (r !== quad && vcount[r]) { kicker = r; break; }
-    return (7 << 20) | (quad << 16) | (kicker << 12);
-  }
-  if (groups[0][0] === 3 && groups[1] && groups[1][0] >= 2) {
-    return (6 << 20) | (groups[0][1] << 16) | (groups[1][1] << 12);
-  }
-  if (flushSuit) {
-    const top = sCards[flushSuit].sort((a,b)=>b-a).slice(0,5);
-    return (5 << 20) | (top[0]<<16) | (top[1]<<12) | (top[2]<<8) | (top[3]<<4) | top[4];
-  }
-  const distinct = [];
-  for (let r = 14; r >= 2; r--) if (vcount[r]) distinct.push(r);
-  if (distinct.includes(14)) distinct.push(1);
-  for (let i = 0; i <= distinct.length - 5; i++) {
-    if (distinct[i] - distinct[i+4] === 4) return (4 << 20) | (distinct[i] << 16);
-  }
-  if (groups[0][0] === 3) {
-    const trip = groups[0][1];
-    const kickers = [];
-    for (let r = 14; r >= 2 && kickers.length < 2; r--) if (r !== trip && vcount[r]) kickers.push(r);
-    return (3 << 20) | (trip << 16) | (kickers[0] << 12) | (kickers[1] << 8);
-  }
-  if (groups[0][0] === 2 && groups[1] && groups[1][0] === 2) {
-    const p1 = groups[0][1], p2 = groups[1][1];
-    let kicker = 0;
-    for (let r = 14; r >= 2; r--) if (r !== p1 && r !== p2 && vcount[r]) { kicker = r; break; }
-    return (2 << 20) | (p1 << 16) | (p2 << 12) | (kicker << 8);
-  }
-  if (groups[0][0] === 2) {
-    const pair = groups[0][1];
-    const k = [];
-    for (let r = 14; r >= 2 && k.length < 3; r--) if (r !== pair && vcount[r]) k.push(r);
-    return (1 << 20) | (pair << 16) | (k[0] << 12) | (k[1] << 8) | (k[2] << 4);
-  }
-  const high = [];
-  for (let r = 14; r >= 2 && high.length < 5; r--) if (vcount[r]) high.push(r);
-  return (0 << 20) | (high[0]<<16) | (high[1]<<12) | (high[2]<<8) | (high[3]<<4) | high[4];
-}
-
-// Expand a range key (AKs, QQ, T9o) into a list of 2-card combos.
 export function expandRangeKey(key) {
   const a = key[0], b = key[1];
   const combos = [];
@@ -110,67 +38,254 @@ export function expandRange(keys) {
   return all;
 }
 
+const MAX_PLAYERS = 9;
+const VCOUNT = new Uint8Array(15);
+const SCOUNT = new Uint8Array(4);
+const SUIT_MASKS = new Uint16Array(4);
+const REMAINING = new Uint8Array(52);
+const FULL_BOARD = new Uint8Array(5);
+const PLAYER_C0 = new Uint8Array(MAX_PLAYERS);
+const PLAYER_C1 = new Uint8Array(MAX_PLAYERS);
+const PLAYER_IDX = new Int8Array(MAX_PLAYERS);
+const SCORES = new Int32Array(MAX_PLAYERS);
+
+function evaluate7(c0, c1, c2, c3, c4, c5, c6) {
+  VCOUNT.fill(0);
+  SCOUNT.fill(0);
+  SUIT_MASKS.fill(0);
+
+  let r, s;
+  r = (c0 >>> 2) + 2; s = c0 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c1 >>> 2) + 2; s = c1 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c2 >>> 2) + 2; s = c2 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c3 >>> 2) + 2; s = c3 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c4 >>> 2) + 2; s = c4 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c5 >>> 2) + 2; s = c5 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+  r = (c6 >>> 2) + 2; s = c6 & 3; VCOUNT[r]++; SCOUNT[s]++; SUIT_MASKS[s] |= (1 << r);
+
+  let flushSuit = -1;
+  for (let i = 0; i < 4; i++) if (SCOUNT[i] >= 5) { flushSuit = i; break; }
+
+  if (flushSuit >= 0) {
+    let mask = SUIT_MASKS[flushSuit];
+    if (mask & (1 << 14)) mask |= (1 << 1);
+    for (let high = 14; high >= 5; high--) {
+      const need = 0b11111 << (high - 4);
+      if ((mask & need) === need) return (8 << 20) | (high << 16);
+    }
+  }
+
+  let quad = 0, trip = 0, secondTrip = 0, pair1 = 0, pair2 = 0;
+  for (let rr = 14; rr >= 2; rr--) {
+    const cc = VCOUNT[rr];
+    if (cc === 4) quad = rr;
+    else if (cc === 3) {
+      if (!trip) trip = rr;
+      else if (!secondTrip) secondTrip = rr;
+    } else if (cc === 2) {
+      if (!pair1) pair1 = rr;
+      else if (!pair2) pair2 = rr;
+    }
+  }
+
+  if (quad) {
+    let kicker = 0;
+    for (let rr = 14; rr >= 2; rr--) if (rr !== quad && VCOUNT[rr]) { kicker = rr; break; }
+    return (7 << 20) | (quad << 16) | (kicker << 12);
+  }
+
+  if (trip) {
+    let secondary = secondTrip;
+    if (pair1 > secondary) secondary = pair1;
+    if (secondary) return (6 << 20) | (trip << 16) | (secondary << 12);
+  }
+
+  if (flushSuit >= 0) {
+    const mask = SUIT_MASKS[flushSuit];
+    let result = (5 << 20);
+    let count = 0;
+    for (let rr = 14; rr >= 2 && count < 5; rr--) {
+      if (mask & (1 << rr)) {
+        result |= (rr << (16 - count * 4));
+        count++;
+      }
+    }
+    return result;
+  }
+
+  let rankMask = 0;
+  for (let rr = 2; rr <= 14; rr++) if (VCOUNT[rr]) rankMask |= (1 << rr);
+  if (rankMask & (1 << 14)) rankMask |= (1 << 1);
+  for (let high = 14; high >= 5; high--) {
+    const need = 0b11111 << (high - 4);
+    if ((rankMask & need) === need) return (4 << 20) | (high << 16);
+  }
+
+  if (trip) {
+    let k0 = 0, k1 = 0;
+    for (let rr = 14; rr >= 2; rr--) {
+      if (rr === trip || !VCOUNT[rr]) continue;
+      if (!k0) k0 = rr;
+      else { k1 = rr; break; }
+    }
+    return (3 << 20) | (trip << 16) | (k0 << 12) | (k1 << 8);
+  }
+
+  if (pair1 && pair2) {
+    let kicker = 0;
+    for (let rr = 14; rr >= 2; rr--) {
+      if (rr === pair1 || rr === pair2 || !VCOUNT[rr]) continue;
+      kicker = rr;
+      break;
+    }
+    return (2 << 20) | (pair1 << 16) | (pair2 << 12) | (kicker << 8);
+  }
+
+  if (pair1) {
+    let k0 = 0, k1 = 0, k2 = 0;
+    for (let rr = 14; rr >= 2; rr--) {
+      if (rr === pair1 || !VCOUNT[rr]) continue;
+      if (!k0) k0 = rr;
+      else if (!k1) k1 = rr;
+      else { k2 = rr; break; }
+    }
+    return (1 << 20) | (pair1 << 16) | (k0 << 12) | (k1 << 8) | (k2 << 4);
+  }
+
+  let h0 = 0, h1 = 0, h2 = 0, h3 = 0, h4 = 0;
+  for (let rr = 14; rr >= 2; rr--) {
+    if (!VCOUNT[rr]) continue;
+    if (!h0) h0 = rr;
+    else if (!h1) h1 = rr;
+    else if (!h2) h2 = rr;
+    else if (!h3) h3 = rr;
+    else { h4 = rr; break; }
+  }
+  return (h0 << 16) | (h1 << 12) | (h2 << 8) | (h3 << 4) | h4;
+}
+
 export function simulate(players, board, sims) {
   const active = [];
-  players.forEach((p, idx) => {
-    if (!p) return;
+  for (let idx = 0; idx < players.length; idx++) {
+    const p = players[idx];
+    if (!p) continue;
     if (p.kind === 'hand' && p.hand && p.hand.length === 2) {
-      active.push({ idx, kind: 'hand', hand: p.hand });
+      active.push({ idx, kind: 'hand', c0: cardToId(p.hand[0]), c1: cardToId(p.hand[1]) });
     } else if (p.kind === 'range' && p.range && p.range.length > 0) {
-      active.push({ idx, kind: 'range', combos: expandRange(p.range) });
+      const combos = expandRange(p.range);
+      const flat = new Uint8Array(combos.length * 2);
+      for (let i = 0; i < combos.length; i++) {
+        flat[i * 2] = cardToId(combos[i][0]);
+        flat[i * 2 + 1] = cardToId(combos[i][1]);
+      }
+      active.push({ idx, kind: 'range', combos: flat, comboCount: combos.length });
     }
-  });
-  if (active.length === 0) return { wins: {}, ties: {}, valid: 0 };
+  }
+  const numActive = active.length;
+  if (numActive === 0) return { wins: {}, ties: {}, valid: 0 };
+
+  for (let pi = 0; pi < numActive; pi++) PLAYER_IDX[pi] = active[pi].idx;
+
+  const boardLen = board.length;
+  let boardMask0 = 0, boardMask1 = 0;
+  for (let i = 0; i < boardLen; i++) {
+    const id = cardToId(board[i]);
+    FULL_BOARD[i] = id;
+    if (id < 32) boardMask0 |= (1 << id);
+    else boardMask1 |= (1 << (id - 32));
+  }
+  const k = 5 - boardLen;
 
   const wins = {}, ties = {};
-  active.forEach(a => { wins[a.idx] = 0; ties[a.idx] = 0; });
-
-  const boardSet = new Set(board.map(cardId));
-  const deck = makeDeck();
+  for (let pi = 0; pi < numActive; pi++) {
+    wins[active[pi].idx] = 0;
+    ties[active[pi].idx] = 0;
+  }
 
   let valid = 0;
   let safety = 0;
-  while (valid < sims && safety < sims * 50) {
+  const maxSafety = sims * 50;
+
+  while (valid < sims && safety < maxSafety) {
     safety++;
-    const used = new Set(boardSet);
-    const playerHands = [];
-    let ok = true;
-    for (const a of active) {
+
+    let used0 = boardMask0, used1 = boardMask1;
+    let ok = 1;
+
+    for (let pi = 0; pi < numActive; pi++) {
+      const a = active[pi];
+      let c0 = 0, c1 = 0;
+
       if (a.kind === 'hand') {
-        const ids = a.hand.map(cardId);
-        if (ids.some(id => used.has(id))) { ok = false; break; }
-        used.add(ids[0]); used.add(ids[1]);
-        playerHands.push({ idx: a.idx, hand: a.hand });
+        c0 = a.c0; c1 = a.c1;
+        const cf0 = c0 < 32 ? (used0 & (1 << c0)) : (used1 & (1 << (c0 - 32)));
+        const cf1 = c1 < 32 ? (used0 & (1 << c1)) : (used1 & (1 << (c1 - 32)));
+        if (cf0 || cf1) { ok = 0; break; }
       } else {
-        let tries = 0, picked = null;
+        const cc = a.comboCount;
+        const combos = a.combos;
+        let tries = 0, found = 0;
         while (tries < 20) {
-          const c = a.combos[(Math.random() * a.combos.length) | 0];
-          const ids = c.map(cardId);
-          if (!used.has(ids[0]) && !used.has(ids[1])) { picked = c; break; }
+          const ci = (Math.random() * cc) | 0;
+          const x0 = combos[ci * 2], x1 = combos[ci * 2 + 1];
+          const cf0 = x0 < 32 ? (used0 & (1 << x0)) : (used1 & (1 << (x0 - 32)));
+          const cf1 = x1 < 32 ? (used0 & (1 << x1)) : (used1 & (1 << (x1 - 32)));
+          if (!cf0 && !cf1) { c0 = x0; c1 = x1; found = 1; break; }
           tries++;
         }
-        if (!picked) { ok = false; break; }
-        used.add(cardId(picked[0])); used.add(cardId(picked[1]));
-        playerHands.push({ idx: a.idx, hand: picked });
+        if (!found) { ok = 0; break; }
       }
+
+      if (c0 < 32) used0 |= (1 << c0); else used1 |= (1 << (c0 - 32));
+      if (c1 < 32) used0 |= (1 << c1); else used1 |= (1 << (c1 - 32));
+      PLAYER_C0[pi] = c0;
+      PLAYER_C1[pi] = c1;
     }
     if (!ok) continue;
 
-    const remaining = deck.filter(c => !used.has(cardId(c)));
-    shuffleTail(remaining, 5 - board.length);
-    const fullBoard = [...board];
-    while (fullBoard.length < 5) fullBoard.push(remaining.pop());
+    let remCount = 0;
+    for (let id = 0; id < 32; id++) {
+      if (!(used0 & (1 << id))) REMAINING[remCount++] = id;
+    }
+    for (let id = 32; id < 52; id++) {
+      if (!(used1 & (1 << (id - 32)))) REMAINING[remCount++] = id;
+    }
+
+    const stop = remCount - k;
+    for (let i = remCount - 1; i >= stop; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      const tmp = REMAINING[i];
+      REMAINING[i] = REMAINING[j];
+      REMAINING[j] = tmp;
+    }
+
+    for (let i = 0; i < k; i++) FULL_BOARD[boardLen + i] = REMAINING[remCount - 1 - i];
 
     let best = -1;
-    const scores = playerHands.map(ph => {
-      const s = evaluate([...ph.hand, ...fullBoard]);
+    for (let pi = 0; pi < numActive; pi++) {
+      const s = evaluate7(
+        PLAYER_C0[pi], PLAYER_C1[pi],
+        FULL_BOARD[0], FULL_BOARD[1], FULL_BOARD[2], FULL_BOARD[3], FULL_BOARD[4]
+      );
+      SCORES[pi] = s;
       if (s > best) best = s;
-      return s;
-    });
-    const winners = [];
-    for (let i = 0; i < scores.length; i++) if (scores[i] === best) winners.push(playerHands[i].idx);
-    if (winners.length === 1) wins[winners[0]]++;
-    else for (const w of winners) ties[w]++;
+    }
+
+    let winnerCount = 0, singleWinner = -1;
+    for (let pi = 0; pi < numActive; pi++) {
+      if (SCORES[pi] === best) {
+        if (winnerCount === 0) singleWinner = pi;
+        winnerCount++;
+      }
+    }
+    if (winnerCount === 1) {
+      wins[PLAYER_IDX[singleWinner]]++;
+    } else {
+      for (let pi = 0; pi < numActive; pi++) {
+        if (SCORES[pi] === best) ties[PLAYER_IDX[pi]]++;
+      }
+    }
+
     valid++;
   }
 

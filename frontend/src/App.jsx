@@ -203,15 +203,16 @@ export default function App() {
       const j = (Math.random() * (i + 1)) | 0;
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
-    setPlayers(prev => {
-      const filledCount = prev.filter(Boolean).length;
-      const target = Math.max(filledCount, 4);
-      const newP = Array(9).fill(null);
-      for (let i = 0; i < target; i++) {
-        newP[i] = { kind: 'hand', hand: [deck.pop(), deck.pop()] };
-      }
-      return newP;
-    });
+    const numPlayers = 2 + ((Math.random() * 8) | 0);
+    const seats = Array.from({ length: 9 }, (_, i) => i);
+    for (let i = seats.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [seats[i], seats[j]] = [seats[j], seats[i]];
+    }
+    const chosen = seats.slice(0, numPlayers);
+    const newP = Array(9).fill(null);
+    for (const s of chosen) newP[s] = { kind: 'hand', hand: [deck.pop(), deck.pop()] };
+    setPlayers(newP);
     setBoard([]);
   }
 
