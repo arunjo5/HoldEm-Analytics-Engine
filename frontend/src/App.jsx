@@ -60,35 +60,24 @@ export default function App() {
     const t = setTimeout(() => {
       if (myVer !== calcVersion.current) return;
 
-      const TOTAL_SIMS = 100000;
+      // Each worker runs in batches; the main thread aggregates and stops
+      // everyone when global SE drops below the threshold. SE_THRESHOLD =
+      // 0.001 gives a 95% CI of ±0.2%. MAX_SIMS is sized so even worst-case
+      // (p≈0.5) spots can reach that precision (~250K needed).
       const N = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 8));
-      const perWorker = Math.ceil(TOTAL_SIMS / N);
+      const MAX_SIMS_TOTAL = 300_000;
+      const BATCH_SIZE = 5000;
+      const SE_THRESHOLD = 0.001;
+      const MIN_SIMS_FOR_CHECK = 10_000;
+      const maxPerWorker = Math.ceil(MAX_SIMS_TOTAL / N);
 
       const workers = [];
-      const promises = [];
-      for (let i = 0; i < N; i++) {
-        const worker = new Worker(new URL('./equityWorker.js', import.meta.url), { type: 'module' });
-        workers.push(worker);
-        promises.push(new Promise(resolve => {
-          worker.onmessage = (e) => resolve(e.data);
-        }));
-        worker.postMessage({ players, board, sims: perWorker, jobId: myVer });
-      }
-      inFlightWorkersRef.current = workers;
+      const aggWins = {}, aggTies = {};
+      let aggValid = 0;
+      let stopped = false;
+      let doneCount = 0;
 
-      Promise.all(promises).then(results => {
-        workers.forEach(w => w.terminate());
-        if (myVer !== calcVersion.current) return;
-
-        const aggWins = {}, aggTies = {};
-        let aggValid = 0;
-        for (const r of results) {
-          aggValid += r.valid;
-          for (const idx of Object.keys(r.wins)) {
-            aggWins[idx] = (aggWins[idx] || 0) + r.wins[idx];
-            aggTies[idx] = (aggTies[idx] || 0) + r.ties[idx];
-          }
-        }
+      function buildPerPlayer() {
         const perPlayer = {};
         for (const idx of Object.keys(aggWins)) {
           perPlayer[idx] = {
@@ -97,9 +86,58 @@ export default function App() {
             equity: aggValid ? ((aggWins[idx] + aggTies[idx] * 0.5) / aggValid) * 100 : 0,
           };
         }
-        setResults({ perPlayer, sims: aggValid });
+        return perPlayer;
+      }
+
+      function finalize() {
+        if (myVer !== calcVersion.current) return;
+        workers.forEach(w => w.terminate());
+        setResults({ perPlayer: buildPerPlayer(), sims: aggValid });
         setCalculating(false);
-      });
+      }
+
+      function checkConvergence() {
+        if (stopped || aggValid < MIN_SIMS_FOR_CHECK) return;
+        let maxSE = 0;
+        for (const idx of Object.keys(aggWins)) {
+          const p = (aggWins[idx] + 0.5 * aggTies[idx]) / aggValid;
+          const se = Math.sqrt(p * (1 - p) / aggValid);
+          if (se > maxSE) maxSE = se;
+        }
+        if (maxSE < SE_THRESHOLD) {
+          stopped = true;
+          finalize();
+        }
+      }
+
+      for (let i = 0; i < N; i++) {
+        const worker = new Worker(new URL('./equityWorker.js', import.meta.url), { type: 'module' });
+        workers.push(worker);
+        worker.onmessage = (e) => {
+          if (e.data.jobId !== myVer || stopped) return;
+          if (e.data.type === 'batch') {
+            aggValid += e.data.deltaValid;
+            for (const idx of Object.keys(e.data.deltaWins)) {
+              aggWins[idx] = (aggWins[idx] || 0) + e.data.deltaWins[idx];
+              aggTies[idx] = (aggTies[idx] || 0) + e.data.deltaTies[idx];
+            }
+            // Stream the running estimate to the UI so equity slides in.
+            setResults({ perPlayer: buildPerPlayer(), sims: aggValid });
+            checkConvergence();
+          } else if (e.data.type === 'done') {
+            doneCount++;
+            if (doneCount === N) finalize();
+          }
+        };
+        worker.postMessage({
+          jobId: myVer,
+          players,
+          board,
+          maxSims: maxPerWorker,
+          batchSize: BATCH_SIZE,
+        });
+      }
+      inFlightWorkersRef.current = workers;
     }, 30);
 
     return () => {
@@ -193,7 +231,7 @@ export default function App() {
         <div className="toolbar">
           {calculating && (
             <div className="status-bar">
-              <span className="dot-pulse" /> running monte carlo · {results.sims.toLocaleString()} sims
+              <span className="dot-pulse" /> calculating · {results.sims.toLocaleString()} sims
             </div>
           )}
           <button className="btn btn-ghost" onClick={dealRandom}>Deal sample</button>
