@@ -235,7 +235,7 @@ export default function App() {
           <button className="btn btn-ghost" onClick={dealRandom}>Deal sample</button>
           <button className="btn btn-ghost" onClick={clearAll}>Clear all</button>
           <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
-            {theme === 'dark' ? '☾' : '☀'}
+            {theme === 'dark' ? '☀' : '☾'}
           </button>
         </div>
       </div>
