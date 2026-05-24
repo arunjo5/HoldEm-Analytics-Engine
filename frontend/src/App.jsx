@@ -28,6 +28,7 @@ export default function App() {
   const [theme, setTheme] = useState('dark');
   const [pot, setPot] = useState('');
   const [callAmt, setCallAmt] = useState('');
+  const [oddsMode, setOddsMode] = useState('potOdds');
   const [results, setResults] = useState({ perPlayer: {}, sims: 0 });
   const [calculating, setCalculating] = useState(false);
   const calcVersion = useRef(0);
@@ -190,7 +191,9 @@ export default function App() {
   const potNum = parseFloat(pot) || 0;
   const callNum = parseFloat(callAmt) || 0;
   const potOddsEntered = potNum > 0 && callNum > 0;
-  const potOddsPct = potOddsEntered ? (callNum / (potNum + callNum)) * 100 : null;
+  // pot = pot BEFORE opponent's bet, callAmt = opponent's bet (= what we'd call).
+  const potOddsPct = potOddsEntered ? (callNum / (potNum + 2 * callNum)) * 100 : null;
+  const mdfPct = potOddsEntered ? (potNum / (potNum + callNum)) * 100 : null;
 
   function clearAll() {
     setPlayers(Array(9).fill(null));
@@ -289,6 +292,8 @@ export default function App() {
         pot={pot} setPot={setPot}
         callAmt={callAmt} setCallAmt={setCallAmt}
         potOddsPct={potOddsPct}
+        mdfPct={mdfPct}
+        oddsMode={oddsMode} setOddsMode={setOddsMode}
       />
 
       {picker && (
@@ -477,7 +482,7 @@ function CardGridOnly({ usedCards, selected, onPick }) {
   );
 }
 
-function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, callAmt, setCallAmt, potOddsPct }) {
+function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, callAmt, setCallAmt, potOddsPct, mdfPct, oddsMode, setOddsMode }) {
   const active = players.map((p, i) => ({ p, i })).filter(x => x.p);
   const haveResults = Object.keys(results.perPlayer).length > 0;
 
@@ -495,10 +500,10 @@ function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, cal
           <div className="results-meta">
             {!validBoard
               ? `board needs 0, 3, 4, or 5 cards · currently ${boardLen}`
-              : haveResults && potOddsPct != null
+              : haveResults && oddsMode === 'potOdds' && potOddsPct != null
                 ? `pot odds threshold: ${potOddsPct.toFixed(1)}%`
-                : haveResults
-                  ? 'enter pot & call to compare vs. pot odds'
+                : haveResults && oddsMode === 'mdf' && mdfPct != null
+                  ? `min defense frequency: ${mdfPct.toFixed(1)}%`
                   : ''}
           </div>
         </div>
@@ -523,12 +528,13 @@ function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, cal
                 const eq = results.perPlayer[i];
                 const equity = eq ? eq.equity : 0;
                 const beatsPotOdds = potOddsPct != null && equity >= potOddsPct;
-                const rowClass = potOddsPct == null ? 'eq-row-neutral' : (beatsPotOdds ? 'eq-row-pos' : 'eq-row-neg');
+                const useColor = oddsMode === 'potOdds' && potOddsPct != null;
+                const rowClass = !useColor ? 'eq-row-neutral' : (beatsPotOdds ? 'eq-row-pos' : 'eq-row-neg');
                 return (
                   <tr key={i} className={rowClass}>
                     <td>
                       <div className="player-cell">
-                        <span className="player-dot" style={{ background: potOddsPct == null ? 'var(--text-faint)' : (beatsPotOdds ? 'var(--green)' : 'var(--gold)') }} />
+                        <span className="player-dot" style={{ background: !useColor ? 'var(--text-faint)' : (beatsPotOdds ? 'var(--green)' : 'var(--gold)') }} />
                         Player {i + 1}
                       </div>
                     </td>
@@ -547,37 +553,69 @@ function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, cal
         )}
       </div>
 
-      <div className={"pot-odds" + (potOddsPct == null ? ' pot-odds-empty' : '')}>
-        <h4>Pot Odds</h4>
+      <div className={"pot-odds" + ((oddsMode === 'mdf' ? mdfPct : potOddsPct) == null ? ' pot-odds-empty' : '')}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <h4>{oddsMode === 'mdf' ? 'MDF' : 'Pot Odds'}</h4>
+          <div className="odds-toggle" role="tablist">
+            <button type="button" className={'odds-toggle-btn ' + (oddsMode === 'potOdds' ? 'active' : '')} onClick={() => setOddsMode('potOdds')}>Pot Odds</button>
+            <button type="button" className={'odds-toggle-btn ' + (oddsMode === 'mdf' ? 'active' : '')} onClick={() => setOddsMode('mdf')}>MDF</button>
+          </div>
+        </div>
         <div className="pot-input-row">
           <div className="pot-input-wrap">
-            <label>Pot</label>
+            <label>{oddsMode === 'mdf' ? 'Pot (before bet)' : 'Pot'}</label>
             <input className="pot-input" type="number" min="0" placeholder="0" value={pot} onChange={e => setPot(e.target.value)} />
           </div>
           <div className="pot-input-wrap">
-            <label>To call</label>
+            <label>{oddsMode === 'mdf' ? 'Bet' : 'To call'}</label>
             <input className="pot-input" type="number" min="0" placeholder="0" value={callAmt} onChange={e => setCallAmt(e.target.value)} />
           </div>
         </div>
-        <div className="pot-result">
-          <div className="pot-result-row">
-            <span className="lbl">Pot odds</span>
-            <span className="val">{potOddsPct == null ? 'N/A' : potOddsPct.toFixed(1) + '%'}</span>
-          </div>
-          <div className="pot-result-row">
-            <span className="lbl">Risk : reward</span>
-            <span className="val" style={{ fontSize: 13 }}>
+        {oddsMode === 'mdf' ? (
+          <>
+            <div className="pot-result">
+              <div className="pot-result-row">
+                <span className="lbl">MDF</span>
+                <span className="val">{mdfPct == null ? 'N/A' : mdfPct.toFixed(1) + '%'}</span>
+              </div>
+              <div className="pot-result-row">
+                <span className="lbl">Bet : pot</span>
+                <span className="val" style={{ fontSize: 13 }}>
+                  {mdfPct == null
+                    ? 'N/A'
+                    : <>{callAmt}<span style={{ color: 'var(--text-dim)', margin: '0 4px' }}>into</span>{pot}</>}
+                </span>
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.5, letterSpacing: 0.01, marginTop: 4 }}>
+              {mdfPct == null
+                ? ''
+                : 'Defend at least this share of your continuing range to remain unexploitable to bluffs.'}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="pot-result">
+              <div className="pot-result-row">
+                <span className="lbl">Pot odds</span>
+                <span className="val">{potOddsPct == null ? 'N/A' : potOddsPct.toFixed(1) + '%'}</span>
+              </div>
+              <div className="pot-result-row">
+                <span className="lbl">Risk : reward</span>
+                <span className="val" style={{ fontSize: 13 }}>
+                  {potOddsPct == null
+                    ? 'N/A'
+                    : <>{callAmt}<span style={{ color: 'var(--text-dim)', margin: '0 4px' }}>to win</span>{(parseFloat(pot) || 0) + (parseFloat(callAmt) || 0)}</>}
+                </span>
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.5, letterSpacing: 0.01, marginTop: 4 }}>
               {potOddsPct == null
-                ? 'N/A'
-                : <>{callAmt}<span style={{ color: 'var(--text-dim)', margin: '0 4px' }}>to win</span>{pot}</>}
-            </span>
-          </div>
-        </div>
-        <div style={{ fontSize: 10.5, color: 'var(--text-faint)', lineHeight: 1.5, letterSpacing: 0.01, marginTop: 4 }}>
-          {potOddsPct == null
-            ? 'Enter pot size and call amount to compare against player equities.'
-            : "A call is profitable when a player's equity exceeds the pot odds threshold."}
-        </div>
+                ? ''
+                : "A call is profitable when a player's equity exceeds the pot odds threshold."}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
