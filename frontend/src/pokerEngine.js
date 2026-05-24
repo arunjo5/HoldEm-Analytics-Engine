@@ -12,12 +12,12 @@ export function makeDeck() {
   return d;
 }
 
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
+function shuffleTail(arr, k) {
+  const stop = Math.max(0, arr.length - k);
+  for (let i = arr.length - 1; i >= stop; i--) {
     const j = (Math.random() * (i + 1)) | 0;
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return arr;
 }
 
 // Evaluate up to 7 cards into an integer score (higher wins).
@@ -110,9 +110,6 @@ export function expandRange(keys) {
   return all;
 }
 
-// players: [{ kind, hand?, range? }]
-// board: Card[]
-// Returns raw counts so caller can aggregate (e.g. across workers).
 export function simulate(players, board, sims) {
   const active = [];
   players.forEach((p, idx) => {
@@ -160,7 +157,7 @@ export function simulate(players, board, sims) {
     if (!ok) continue;
 
     const remaining = deck.filter(c => !used.has(cardId(c)));
-    shuffle(remaining);
+    shuffleTail(remaining, 5 - board.length);
     const fullBoard = [...board];
     while (fullBoard.length < 5) fullBoard.push(remaining.pop());
 
@@ -180,8 +177,6 @@ export function simulate(players, board, sims) {
   return { wins, ties, valid };
 }
 
-// Convenience: run sims on the calling thread and return percentages.
-// Workers call `simulate` directly so counts can be aggregated.
 export function calculate(players, board, opts = {}) {
   const sims = opts.sims || 100000;
   const { wins, ties, valid } = simulate(players, board, sims);

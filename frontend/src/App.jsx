@@ -53,21 +53,16 @@ export default function App() {
     if (!active || !validBoard) { setResults({ perPlayer: {}, sims: 0 }); setCalculating(false); return; }
     setCalculating(true);
 
-    // Kill any workers still chewing on the previous calc.
     inFlightWorkersRef.current.forEach(w => w.terminate());
     inFlightWorkersRef.current = [];
 
     const t = setTimeout(() => {
       if (myVer !== calcVersion.current) return;
 
-      // Each worker runs in batches; the main thread aggregates and stops
-      // everyone when global SE drops below the threshold. SE_THRESHOLD =
-      // 0.001 gives a 95% CI of ±0.2%. MAX_SIMS is sized so even worst-case
-      // (p≈0.5) spots can reach that precision (~250K needed).
       const N = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 8));
-      const MAX_SIMS_TOTAL = 300_000;
+      const MAX_SIMS_TOTAL = 1_000_000;
       const BATCH_SIZE = 5000;
-      const SE_THRESHOLD = 0.001;
+      const SE_THRESHOLD = 0.0005;
       const MIN_SIMS_FOR_CHECK = 10_000;
       const maxPerWorker = Math.ceil(MAX_SIMS_TOTAL / N);
 
@@ -121,7 +116,6 @@ export default function App() {
               aggWins[idx] = (aggWins[idx] || 0) + e.data.deltaWins[idx];
               aggTies[idx] = (aggTies[idx] || 0) + e.data.deltaTies[idx];
             }
-            // Stream the running estimate to the UI so equity slides in.
             setResults({ perPlayer: buildPerPlayer(), sims: aggValid });
             checkConvergence();
           } else if (e.data.type === 'done') {
