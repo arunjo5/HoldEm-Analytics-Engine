@@ -86,18 +86,30 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
-    const csrf = await getCsrfToken();
-    const body = new URLSearchParams({
-      csrfToken: csrf,
-      callbackUrl: window.location.origin,
-    });
-    await fetch('/api/auth/signout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-    setUser(null);
+    try {
+      const csrf = await getCsrfToken();
+      const body = new URLSearchParams({
+        csrfToken: csrf,
+        callbackUrl: window.location.origin,
+      });
+      // redirect: 'manual' for the same reason as sign-in — NextAuth's 302
+      // points at the backend origin and following it cross-origin throws.
+      // The session cookie is cleared on this response regardless.
+      await fetch('/api/auth/signout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        redirect: 'manual',
+      });
+    } catch {
+      // ignore network/redirect errors — we still clear local state below
+    } finally {
+      // Always drop the local user, then re-sync from the server so the UI
+      // reflects the (now signed-out) session even if the cookie lingered.
+      setUser(null);
+      refresh();
+    }
   }
 
   return (
