@@ -38,6 +38,7 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  password      String?
   accounts      Account[]
   sessions      Session[]
   searches      Search[]
@@ -53,12 +54,15 @@ model VerificationToken {
 }
 
 model Search {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  players   Json     
-  board     Json     
-  odds      Json    
-  createdAt DateTime @default(now())
-  name      String?  
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  players     Json
+  board       Json
+  odds        Json
+  playerNames Json?
+  scenario    String?  @db.Text
+  favorite    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  name        String?
 }

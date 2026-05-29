@@ -1,20 +1,58 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as PokerEngine from './pokerEngine.js';
 import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_GLYPH, SUIT_RED } from './Cards.jsx';
 import { CardPicker, RangePicker, SUIT_ORDER, VALUE_ORDER } from './Pickers.jsx';
 import { PlayerSeat } from './Seat.jsx';
+import { useAuth } from './AuthContext.jsx';
+import { HistoryDrawer } from './HistoryDrawer.jsx';
+import { ShareModal } from './ShareModal.jsx';
+import {
+  encodeScenario,
+  decodeScenario,
+  readScenarioFromUrl,
+  buildShareUrl,
+} from './scenario.js';
 
-// 9 seats around the felt, evenly spaced, P1 at top.
+const NAMES_KEY = 'holdem_player_names_v1';
+
+// 9 seats arranged around the felt with EQUAL ARC LENGTH between neighbours
+// (not equal angle) — keeps them evenly spaced even on an elongated felt.
+// Player 1 sits at the top.
 const SEAT_POSITIONS = (() => {
-  const positions = [];
   const N = 9;
-  const cx = 50, cy = 50;
-  const rx = 44, ry = 42;
-  for (let i = 0; i < N; i++) {
-    const rad = ((360 / N) * i - 90) * Math.PI / 180;
+  const cx_pct = 50, cy_pct = 50;
+  const rx_pct = 44, ry_pct = 38;
+  const STAGE_W = 1080, STAGE_H = 600;
+  const rxPx = (rx_pct / 100) * STAGE_W;
+  const ryPx = (ry_pct / 100) * STAGE_H;
+
+  const SAMPLES = 4000;
+  const dtheta = (2 * Math.PI) / SAMPLES;
+  const startAngle = -Math.PI / 2;
+  const cumLen = [0];
+  let total = 0;
+  for (let i = 1; i <= SAMPLES; i++) {
+    const theta = startAngle + i * dtheta;
+    const dx = -rxPx * Math.sin(theta);
+    const dy = ryPx * Math.cos(theta);
+    total += Math.sqrt(dx * dx + dy * dy) * dtheta;
+    cumLen.push(total);
+  }
+  function thetaAtArc(targetS) {
+    let lo = 0, hi = SAMPLES;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cumLen[mid] < targetS) lo = mid + 1;
+      else hi = mid;
+    }
+    return startAngle + lo * dtheta;
+  }
+  const positions = [];
+  for (let k = 0; k < N; k++) {
+    const theta = thetaAtArc((k / N) * total);
     positions.push({
-      x: cx + rx * Math.cos(rad),
-      y: cy + ry * Math.sin(rad),
+      x: cx_pct + rx_pct * Math.cos(theta),
+      y: cy_pct + ry_pct * Math.sin(theta),
     });
   }
   return positions;
@@ -23,6 +61,10 @@ const SEAT_POSITIONS = (() => {
 export default function App() {
   const [players, setPlayers] = useState(() => Array(9).fill(null));
   const [board, setBoard] = useState([]);
+  const [playerNames, setPlayerNames] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(NAMES_KEY) || 'null') || Array(9).fill(null); }
+    catch { return Array(9).fill(null); }
+  });
   const [picker, setPicker] = useState(null);
   const [boardPicker, setBoardPicker] = useState(null);
   const [theme, setTheme] = useState('dark');
@@ -33,6 +75,111 @@ export default function App() {
   const [calculating, setCalculating] = useState(false);
   const calcVersion = useRef(0);
   const inFlightWorkersRef = useRef([]);
+  const { user, signIn, signOut } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const lastSavedScenarioRef = useRef(null);
+
+  // ── History / share / shared-link state ──
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [showShare, setShowShare] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
+  const [sharedToast, setSharedToast] = useState(false);
+
+  // ── Auto-load a scenario from the URL hash on first mount ──
+  useEffect(() => {
+    const sc = readScenarioFromUrl();
+    if (!sc) return;
+    setPlayers(sc.players);
+    setBoard(sc.board);
+    setPlayerNames(sc.playerNames);
+    setPot(sc.pot);
+    setCallAmt(sc.callAmt);
+    // strip hash so refreshes don't re-load
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setSharedToast(true);
+    const t = setTimeout(() => setSharedToast(false), 3600);
+    return () => clearTimeout(t);
+  }, []);
+
+  // ── Persist custom player names locally ──
+  useEffect(() => {
+    try { localStorage.setItem(NAMES_KEY, JSON.stringify(playerNames)); } catch {}
+  }, [playerNames]);
+
+  // ── History API ──
+  const refreshHistory = useCallback(async () => {
+    if (!user) { setHistory([]); return; }
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const r = await fetch('/api/searches', { credentials: 'include' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setHistory((data.searches || []).map(toHistoryItem));
+    } catch (e) {
+      setHistoryError(e.message || 'Network error');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [user]);
+
+  function openHistory() {
+    setShowHistory(true);
+    refreshHistory();
+  }
+
+  async function toggleFavorite(id, favorite) {
+    setHistory(prev => prev.map(h => h.id === id ? { ...h, starred: favorite } : h));
+    try {
+      const r = await fetch(`/api/searches/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorite }),
+      });
+      if (!r.ok) throw new Error('save failed');
+    } catch {
+      setHistory(prev => prev.map(h => h.id === id ? { ...h, starred: !favorite } : h));
+    }
+  }
+
+  async function deleteHistoryItem(id) {
+    const prev = history;
+    setHistory(h => h.filter(x => x.id !== id));
+    try {
+      const r = await fetch(`/api/searches/${id}`, { method: 'DELETE', credentials: 'include' });
+      if (!r.ok) throw new Error('delete failed');
+    } catch {
+      setHistory(prev);
+    }
+  }
+
+  async function clearAllUnfavorited() {
+    const toDelete = history.filter(h => !h.starred);
+    setHistory(h => h.filter(x => x.starred));
+    for (const h of toDelete) {
+      fetch(`/api/searches/${h.id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    }
+  }
+
+  function loadHistoryItem(item) {
+    const sc = decodeScenario(item.scenario);
+    if (!sc) return;
+    setPlayers(sc.players);
+    setBoard(sc.board);
+    setPlayerNames(sc.playerNames);
+    setPot(sc.pot);
+    setCallAmt(sc.callAmt);
+    setShowHistory(false);
+  }
+
+  function openShare() {
+    setShareUrl(buildShareUrl({ players, board, playerNames, pot, callAmt }));
+    setShowShare(true);
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle('light', theme === 'light');
@@ -172,6 +319,14 @@ export default function App() {
     setPlayers(prev => { const n = [...prev]; n[seatIdx] = null; return n; });
   }
 
+  function renamePlayer(seatIdx, newName) {
+    setPlayerNames(prev => {
+      const n = [...prev];
+      n[seatIdx] = newName;
+      return n;
+    });
+  }
+
   function openBoardPicker(idx) {
     setBoardPicker({ index: idx, selectedCards: board[idx] ? [board[idx]] : [] });
   }
@@ -198,7 +353,72 @@ export default function App() {
   function clearAll() {
     setPlayers(Array(9).fill(null));
     setBoard([]);
+    setPlayerNames(Array(9).fill(null));
   }
+
+  async function saveHand() {
+    if (!user) { signIn(); return; }
+    const name = window.prompt('Name this hand (optional):', '') ?? '';
+    setSaving(true);
+    const scenario = encodeScenario({ players, board, playerNames, pot, callAmt });
+    try {
+      const r = await fetch('/api/searches', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name || null,
+          players,
+          board,
+          playerNames,
+          scenario,
+          odds: results.perPlayer || {},
+        }),
+      });
+      if (!r.ok) alert('Failed to save hand');
+      else lastSavedScenarioRef.current = scenario;
+    } catch {
+      alert('Failed to save hand');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Auto-save every distinct calc result to history ──
+  // Debounced 1.5s after the calc settles; deduped by scenario hash so
+  // unchanging spots and explicit Saves don't double up.
+  useEffect(() => {
+    if (!user) return;
+    if (!validBoard) return;
+    if (!results.sims) return;
+    const hasActive = players.some(p => p && (
+      (p.kind === 'hand' && p.hand.length === 2) ||
+      (p.kind === 'range' && p.range.length > 0)
+    ));
+    if (!hasActive) return;
+
+    const scenario = encodeScenario({ players, board, playerNames, pot, callAmt });
+    if (scenario === lastSavedScenarioRef.current) return;
+
+    const t = setTimeout(() => {
+      lastSavedScenarioRef.current = scenario;
+      fetch('/api/searches', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: null,
+          players,
+          board,
+          playerNames,
+          scenario,
+          odds: results.perPlayer || {},
+        }),
+      }).catch(() => { lastSavedScenarioRef.current = null; });
+    }, 1500);
+
+    return () => clearTimeout(t);
+  }, [results, players, board, playerNames, pot, callAmt, user, validBoard]);
 
   function dealRandom() {
     const deck = PokerEngine.makeDeck();
@@ -215,8 +435,13 @@ export default function App() {
     const chosen = seats.slice(0, numPlayers);
     const newP = Array(9).fill(null);
     for (const s of chosen) newP[s] = { kind: 'hand', hand: [deck.pop(), deck.pop()] };
+    // Random street: preflop / flop / turn / river — uniform.
+    const STREETS = [0, 3, 4, 5];
+    const boardSize = STREETS[(Math.random() * STREETS.length) | 0];
+    const newBoard = [];
+    for (let i = 0; i < boardSize; i++) newBoard.push(deck.pop());
     setPlayers(newP);
-    setBoard([]);
+    setBoard(newBoard);
   }
 
   return (
@@ -234,9 +459,35 @@ export default function App() {
           )}
           <button className="btn btn-ghost" onClick={dealRandom}>Deal sample</button>
           <button className="btn btn-ghost" onClick={clearAll}>Clear all</button>
+          <button className="btn btn-ghost btn-share" onClick={openShare} title="Share scenario via link">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+            </svg>
+            Share
+          </button>
+          {user && (
+            <>
+              <button className="btn btn-primary" onClick={saveHand} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button className="btn btn-ghost" onClick={openHistory}>History</button>
+            </>
+          )}
           <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
             {theme === 'dark' ? '☀' : '☾'}
           </button>
+          <div className="topbar-divider" />
+          {user ? (
+            <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} />
+          ) : (
+            <button className="btn btn-signin" onClick={signIn}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
+              </svg>
+              Sign in
+            </button>
+          )}
         </div>
       </div>
 
@@ -277,6 +528,8 @@ export default function App() {
                   onOpen={() => openPicker(i)}
                   onRemove={() => removePlayer(i)}
                   equity={results.perPlayer[i] || null}
+                  name={playerNames[i]}
+                  onRename={(nm) => renamePlayer(i, nm)}
                 />
               </div>
             ))}
@@ -286,6 +539,7 @@ export default function App() {
 
       <ResultsPanel
         players={players}
+        playerNames={playerNames}
         results={results}
         boardLen={board.length}
         validBoard={validBoard}
@@ -321,8 +575,119 @@ export default function App() {
           />
         </div>
       )}
+
+      <HistoryDrawer
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        history={history}
+        loading={historyLoading}
+        error={historyError}
+        onLoad={loadHistoryItem}
+        onToggleFavorite={toggleFavorite}
+        onDelete={deleteHistoryItem}
+        onClear={clearAllUnfavorited}
+        user={user}
+      />
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+
+      {sharedToast && (
+        <div className="shared-toast">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          Loaded shared scenario
+        </div>
+      )}
     </div>
   );
+}
+
+// ─── UserChip — avatar dropdown in the topbar ───
+function UserChip({ user, onSignOut, onOpenHistory }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  const initial = (user.name || user.email || '?')[0].toUpperCase();
+  const avatar = user.image
+    ? <img src={user.image} alt="" className="user-avatar user-avatar-img" />
+    : <span className="user-avatar">{initial}</span>;
+  return (
+    <div className="user-chip-wrap" ref={ref}>
+      <button className="user-chip" onClick={() => setOpen(o => !o)}>
+        {avatar}
+        <span className="user-chip-name">{user.name || user.email}</span>
+        <span className="user-chip-caret">▾</span>
+      </button>
+      {open && (
+        <div className="user-menu">
+          <div className="user-menu-head">
+            <div className="user-menu-name">{user.name || 'Account'}</div>
+            <div className="user-menu-email">{user.email}</div>
+          </div>
+          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenHistory(); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
+            </svg>
+            Hand history
+          </button>
+          <button className="user-menu-item danger" onClick={() => { setOpen(false); onSignOut(); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
+            </svg>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Map a Search row from /api/searches to a HistoryRow item ───
+function toHistoryItem(s) {
+  const players = Array.isArray(s.players) ? s.players : [];
+  const board = Array.isArray(s.board) ? s.board : [];
+  const odds = s.odds || {};
+  const playerNames = Array.isArray(s.playerNames) ? s.playerNames : [];
+
+  const activeIdx = players.map((p, i) => p ? i : -1).filter(i => i >= 0);
+  const heroIdx = activeIdx.find(i => players[i] && players[i].kind === 'hand') ?? activeIdx[0] ?? 0;
+  const hero = players[heroIdx];
+  const heroEq = odds[heroIdx];
+
+  let topIdx = activeIdx[0] ?? 0;
+  let topEq = -1;
+  activeIdx.forEach(i => {
+    const e = odds[i];
+    if (e && e.equity > topEq) { topEq = e.equity; topIdx = i; }
+  });
+
+  const nameOf = (i) => playerNames[i] || `Player ${i + 1}`;
+  const scenario = s.scenario || encodeScenario({
+    players, board, playerNames,
+    pot: s.pot || '', callAmt: s.callAmt || '',
+  });
+
+  return {
+    id: s.id,
+    ts: s.createdAt ? new Date(s.createdAt).getTime() : Date.now(),
+    name: s.name || null,
+    scenario,
+    playerCount: activeIdx.length,
+    boardLen: board.length,
+    boardPreview: board.slice(0, 5),
+    heroCards: hero && hero.kind === 'hand' ? hero.hand : null,
+    heroLabel: hero && hero.kind === 'range' ? `${hero.range?.length || 0} combos` : null,
+    heroName: nameOf(heroIdx),
+    heroEquity: heroEq ? heroEq.equity : null,
+    topName: nameOf(topIdx),
+    topEquity: topEq >= 0 ? topEq : null,
+    starred: !!s.favorite,
+  };
 }
 
 function StageScaler({ children }) {
@@ -482,8 +847,9 @@ function CardGridOnly({ usedCards, selected, onPick }) {
   );
 }
 
-function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, callAmt, setCallAmt, potOddsPct, mdfPct, oddsMode, setOddsMode }) {
+function ResultsPanel({ players, playerNames, results, boardLen, validBoard, pot, setPot, callAmt, setCallAmt, potOddsPct, mdfPct, oddsMode, setOddsMode }) {
   const active = players.map((p, i) => ({ p, i })).filter(x => x.p);
+  const nameOf = (i) => (playerNames && playerNames[i]) || `Player ${i + 1}`;
   const haveResults = Object.keys(results.perPlayer).length > 0;
 
   function describe(p) {
@@ -535,7 +901,7 @@ function ResultsPanel({ players, results, boardLen, validBoard, pot, setPot, cal
                     <td>
                       <div className="player-cell">
                         <span className="player-dot" style={{ background: !useColor ? 'var(--text-faint)' : (beatsPotOdds ? 'var(--green)' : 'var(--gold)') }} />
-                        Player {i + 1}
+                        {nameOf(i)}
                       </div>
                     </td>
                     <td style={{ color: 'var(--text-dim)' }}>{describe(p)}</td>

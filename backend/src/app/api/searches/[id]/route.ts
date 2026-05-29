@@ -2,48 +2,61 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+async function ownedSearch(userId: string, id: string) {
+  return prisma.search.findFirst({ where: { id, userId } })
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const found = await ownedSearch(session.user.id, params.id)
+    if (!found) {
+      return NextResponse.json({ error: 'Search not found' }, { status: 404 })
+    }
+
+    const body = await request.json().catch(() => ({}))
+    const data: any = {}
+    if (typeof body.favorite === 'boolean') data.favorite = body.favorite
+    if (typeof body.name === 'string') data.name = body.name
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+    }
+
+    const updated = await prisma.search.update({ where: { id: params.id }, data })
+    return NextResponse.json({ search: updated })
+  } catch (err) {
+    console.error('PATCH search error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const session = await auth()
-    
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id } = params
-
-    // Verify the search belongs to the user
-    const search = await prisma.search.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
-
-    if (!search) {
-      return NextResponse.json(
-        { error: 'Search not found or access denied' },
-        { status: 404 }
-      )
+    const found = await ownedSearch(session.user.id, params.id)
+    if (!found) {
+      return NextResponse.json({ error: 'Search not found or access denied' }, { status: 404 })
     }
 
-    // Delete the search
-    await prisma.search.delete({
-      where: { id },
-    })
-
+    await prisma.search.delete({ where: { id: params.id } })
     return NextResponse.json({ message: 'Search deleted successfully' })
-  } catch (error) {
-    console.error('Error deleting search:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+  } catch (err) {
+    console.error('DELETE search error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
