@@ -61,11 +61,16 @@ export function AuthProvider({ children }) {
         callbackUrl: window.location.origin,
         redirect: 'false',
       });
+      // redirect: 'manual' — NextAuth answers with a 302 whose Location is on
+      // the backend origin; letting fetch follow it cross-origin throws
+      // "Failed to fetch". We don't need the target: the session cookie is
+      // already set on this response, so we just read it back via refresh().
       const resp = await fetch('/api/auth/callback/credentials', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
+        redirect: 'manual',
       });
       if (resp.status === 429) {
         throw new Error('Too many sign-in attempts. Try again in a few minutes.');
