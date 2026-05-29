@@ -61,12 +61,15 @@ export function AuthProvider({ children }) {
         callbackUrl: window.location.origin,
         redirect: 'false',
       });
-      await fetch('/api/auth/callback/credentials', {
+      const resp = await fetch('/api/auth/callback/credentials', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
       });
+      if (resp.status === 429) {
+        throw new Error('Too many sign-in attempts. Try again in a few minutes.');
+      }
       const u = await refresh();
       if (!u) throw new Error('Invalid username or password');
       setModalOpen(false);
