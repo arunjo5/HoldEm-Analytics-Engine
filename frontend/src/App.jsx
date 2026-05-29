@@ -77,7 +77,13 @@ export default function App() {
   const inFlightWorkersRef = useRef([]);
   const { user, signIn, signOut } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const lastSavedScenarioRef = useRef(null);
+  // Latest committable hand state, kept fresh without saving. Auto-save
+  // commits this ONCE at a hand boundary (clear, new deal, load, page exit)
+  // — not on every intermediate edit — so building one 5-way spot is 1 row.
+  const currentSnapshotRef = useRef(null);
 
   // ── History / share / shared-link state ──
   const [showHistory, setShowHistory] = useState(false);
@@ -97,6 +103,11 @@ export default function App() {
     setPlayerNames(sc.playerNames);
     setPot(sc.pot);
     setCallAmt(sc.callAmt);
+    // Treat the shared spot as already-saved; only persist if the user edits it.
+    lastSavedScenarioRef.current = encodeScenario({
+      players: sc.players, board: sc.board, playerNames: sc.playerNames,
+      pot: sc.pot, callAmt: sc.callAmt,
+    });
     // strip hash so refreshes don't re-load
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     setSharedToast(true);
@@ -168,11 +179,17 @@ export default function App() {
   function loadHistoryItem(item) {
     const sc = decodeScenario(item.scenario);
     if (!sc) return;
+    commitToHistory(); // save whatever hand was in progress before replacing it
     setPlayers(sc.players);
     setBoard(sc.board);
     setPlayerNames(sc.playerNames);
     setPot(sc.pot);
     setCallAmt(sc.callAmt);
+    // Don't re-save the item we just loaded unless the user changes it.
+    lastSavedScenarioRef.current = encodeScenario({
+      players: sc.players, board: sc.board, playerNames: sc.playerNames,
+      pot: sc.pot, callAmt: sc.callAmt,
+    });
     setShowHistory(false);
   }
 
@@ -351,15 +368,21 @@ export default function App() {
   const mdfPct = potOddsEntered ? (potNum / (potNum + callNum)) * 100 : null;
 
   function clearAll() {
+    commitToHistory();
     setPlayers(Array(9).fill(null));
     setBoard([]);
     setPlayerNames(Array(9).fill(null));
   }
 
-  async function saveHand() {
+  function saveHand() {
     if (!user) { signIn(); return; }
-    const name = window.prompt('Name this hand (optional):', '') ?? '';
+    setSaveError(null);
+    setSaveModalOpen(true);
+  }
+
+  async function doSave(name) {
     setSaving(true);
+    setSaveError(null);
     const scenario = encodeScenario({ players, board, playerNames, pot, callAmt });
     try {
       const r = await fetch('/api/searches', {
@@ -375,52 +398,80 @@ export default function App() {
           odds: results.perPlayer || {},
         }),
       });
-      if (!r.ok) alert('Failed to save hand');
-      else lastSavedScenarioRef.current = scenario;
+      if (!r.ok) throw new Error('save failed');
+      lastSavedScenarioRef.current = scenario;
+      setSaveModalOpen(false);
     } catch {
-      alert('Failed to save hand');
+      setSaveError('Could not save. Try again.');
     } finally {
       setSaving(false);
     }
   }
 
-  // ── Auto-save every distinct calc result to history ──
-  // Debounced 1.5s after the calc settles; deduped by scenario hash so
-  // unchanging spots and explicit Saves don't double up.
+  // ── Keep the current committable hand snapshot fresh (no network) ──
   useEffect(() => {
-    if (!user) return;
-    if (!validBoard) return;
-    if (!results.sims) return;
     const hasActive = players.some(p => p && (
       (p.kind === 'hand' && p.hand.length === 2) ||
       (p.kind === 'range' && p.range.length > 0)
     ));
-    if (!hasActive) return;
+    if (!hasActive || !validBoard || !results.sims) {
+      currentSnapshotRef.current = null;
+      return;
+    }
+    currentSnapshotRef.current = {
+      players,
+      board,
+      playerNames,
+      pot,
+      callAmt,
+      odds: results.perPlayer || {},
+      scenario: encodeScenario({ players, board, playerNames, pot, callAmt }),
+    };
+  }, [results, players, board, playerNames, pot, callAmt, validBoard]);
 
-    const scenario = encodeScenario({ players, board, playerNames, pot, callAmt });
-    if (scenario === lastSavedScenarioRef.current) return;
-
-    const t = setTimeout(() => {
-      lastSavedScenarioRef.current = scenario;
+  // ── Commit the current hand to history (once per distinct hand) ──
+  // Called at hand boundaries; deduped so the same spot isn't saved twice.
+  const commitToHistory = useCallback((useBeacon = false) => {
+    if (!user) return;
+    const snap = currentSnapshotRef.current;
+    if (!snap || snap.scenario === lastSavedScenarioRef.current) return;
+    lastSavedScenarioRef.current = snap.scenario;
+    const body = JSON.stringify({
+      name: null,
+      players: snap.players,
+      board: snap.board,
+      playerNames: snap.playerNames,
+      scenario: snap.scenario,
+      odds: snap.odds,
+    });
+    if (useBeacon && navigator.sendBeacon) {
+      navigator.sendBeacon('/api/searches', new Blob([body], { type: 'application/json' }));
+    } else {
       fetch('/api/searches', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: null,
-          players,
-          board,
-          playerNames,
-          scenario,
-          odds: results.perPlayer || {},
-        }),
+        body,
+        keepalive: true,
       }).catch(() => { lastSavedScenarioRef.current = null; });
-    }, 1500);
+    }
+  }, [user]);
 
-    return () => clearTimeout(t);
-  }, [results, players, board, playerNames, pot, callAmt, user, validBoard]);
+  // ── Commit on page exit (tab close / navigate away / backgrounded) ──
+  useEffect(() => {
+    if (!user) return;
+    const onHide = () => commitToHistory(true);
+    const onVis = () => { if (document.visibilityState === 'hidden') commitToHistory(true); };
+    window.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [user, commitToHistory]);
 
   function dealRandom() {
+    commitToHistory();
     const deck = PokerEngine.makeDeck();
     for (let i = deck.length - 1; i > 0; i--) {
       const j = (Math.random() * (i + 1)) | 0;
@@ -589,6 +640,13 @@ export default function App() {
         user={user}
       />
       <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      <SaveModal
+        open={saveModalOpen}
+        busy={saving}
+        error={saveError}
+        onClose={() => setSaveModalOpen(false)}
+        onSave={doSave}
+      />
 
       {sharedToast && (
         <div className="shared-toast">
@@ -598,6 +656,57 @@ export default function App() {
           Loaded shared scenario
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── SaveModal — name-and-save a hand (replaces window.prompt) ───
+function SaveModal({ open, busy, error, onClose, onSave }) {
+  const [name, setName] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setTimeout(() => inputRef.current?.focus(), 60);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="share-modal" role="dialog" aria-label="Save hand">
+        <div className="share-head">
+          <div>
+            <div className="auth-title">Save hand</div>
+            <div className="auth-sub">Give it a name, or leave blank to save as-is.</div>
+          </div>
+          <button className="modal-x" onClick={onClose} disabled={busy} aria-label="Close">×</button>
+        </div>
+        <form
+          className="share-body"
+          onSubmit={(e) => { e.preventDefault(); onSave(name.trim()); }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+        >
+          <input
+            ref={inputRef}
+            className="share-link"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name (optional)"
+            maxLength={80}
+          />
+          {error && <div style={{ color: 'var(--red)', fontSize: 12 }}>{error}</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save hand'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

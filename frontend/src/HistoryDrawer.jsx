@@ -121,7 +121,8 @@ export function HistoryDrawer({
   user,
 }) {
   const [filter, setFilter] = useState('all');
-  useEffect(() => { if (!open) setFilter('all'); }, [open]);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  useEffect(() => { if (!open) { setFilter('all'); setConfirmingClear(false); } }, [open]);
 
   if (!open) return null;
 
@@ -155,10 +156,23 @@ export function HistoryDrawer({
             Starred<span className="drawer-tab-count">{starredCount}</span>
           </button>
           {history.length > 0 && (
-            <button
-              className="drawer-tab-clear"
-              onClick={() => { if (window.confirm('Clear all unfavorited hands?')) onClear(); }}
-            >Clear all</button>
+            confirmingClear ? (
+              <span className="drawer-clear-confirm">
+                <span className="drawer-clear-q">Clear unfavorited?</span>
+                <button
+                  className="drawer-clear-yes"
+                  onClick={() => { onClear(); setConfirmingClear(false); }}
+                >Clear</button>
+                <button
+                  className="drawer-clear-no"
+                  onClick={() => setConfirmingClear(false)}
+                >Cancel</button>
+              </span>
+            ) : (
+              <button className="drawer-tab-clear" onClick={() => setConfirmingClear(true)}>
+                Clear all
+              </button>
+            )
           )}
         </div>
 

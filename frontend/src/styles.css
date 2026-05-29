@@ -1053,6 +1053,39 @@ body {
 }
 .drawer-tab-clear:hover { color: var(--red); }
 
+.drawer-clear-confirm {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.drawer-clear-q {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.drawer-clear-yes,
+.drawer-clear-no {
+  background: transparent;
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 9px;
+  border-radius: 5px;
+  transition: all 0.15s ease;
+}
+.drawer-clear-yes {
+  color: var(--red);
+  border-color: rgba(216, 70, 62, 0.35);
+}
+.drawer-clear-yes:hover {
+  background: rgba(216, 70, 62, 0.14);
+  border-color: var(--red);
+}
+.drawer-clear-no { color: var(--text-dim); }
+.drawer-clear-no:hover { color: var(--text); border-color: var(--border-2); }
+
 .drawer-body {
   flex: 1;
   overflow-y: auto;
