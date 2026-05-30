@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { limit, getClientIp } from '@/lib/rateLimit'
 import { readJsonBody } from '@/lib/body'
 
 export async function POST(request: NextRequest) {
   try {
-    // Throttle account creation: 8 per hour per IP.
     const ip = getClientIp(request)
-    const rl = rateLimit(`signup:${ip}`, 8, 60 * 60_000)
+    const rl = await limit('signup', ip)
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Too many sign-ups from this network. Try again later.' },

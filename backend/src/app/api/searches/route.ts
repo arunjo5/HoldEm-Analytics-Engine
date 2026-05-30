@@ -2,14 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { readJsonBody } from '@/lib/body'
+import { limit } from '@/lib/rateLimit'
 
-// Max total saved hands kept per user. When over the cap, non-favorites are
-// pruned (oldest first) before favorites — favorites only get dropped if the
-// favorites alone exceed the cap.
+// Per-user row cap. Over this, non-favorites get pruned before favorites.
 const SAVE_CAP = 250
-
-// A real save is a few KB; 100 KB is generous but blocks junk-payload abuse.
-const MAX_BODY = 100 * 1024
+const MAX_BODY = 100 * 1024 // legit saves are a few KB
 const MAX_NAME = 200
 
 export async function POST(request: NextRequest) {
@@ -19,6 +16,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const userId = session.user.id
+
+    const rl = await limit('save', userId)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Saving too fast. Slow down a moment.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
 
     const parsed = await readJsonBody(request, MAX_BODY)
     if (parsed.error) return parsed.error
@@ -55,10 +60,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Keep only the top SAVE_CAP hands: favorites rank above non-favorites,
-    // and within each group newer ranks above older. Everything past the cap
-    // is pruned — so non-favorites are dropped (oldest first) before any
-    // favorite is touched.
+    // Prune past the cap, favorites last, oldest first.
     const stale = await prisma.search.findMany({
       where: { userId },
       orderBy: [{ favorite: 'desc' }, { createdAt: 'desc' }],

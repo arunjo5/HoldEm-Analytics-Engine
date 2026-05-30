@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handlers } from '@/auth'
-import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { limit, getClientIp } from '@/lib/rateLimit'
 
 export const GET = handlers.GET
 
 export async function POST(req: NextRequest) {
-  // Throttle credential sign-in attempts: 10 per 5 min per IP.
+  // throttle credential sign-in attempts
   if (req.url.includes('/callback/credentials')) {
     const ip = getClientIp(req)
-    const rl = rateLimit(`login:${ip}`, 10, 5 * 60_000)
+    const rl = await limit('login', ip)
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Too many sign-in attempts. Try again in a few minutes.' },

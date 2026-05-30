@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server'
 
-// Read a request body as JSON, rejecting anything larger than `maxBytes`.
-// Returns { data } on success, or { error } with a ready-to-return response.
-// Guards against storage-exhaustion abuse: a legit save is a few KB, so the
-// caps here are generous for real use but kill multi-MB junk payloads.
+// Read + JSON-parse a body, rejecting anything over maxBytes (413).
 export async function readJsonBody(
   request: Request,
   maxBytes: number
