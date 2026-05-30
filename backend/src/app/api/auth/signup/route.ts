@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { readJsonBody } from '@/lib/body'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,20 +16,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { username: rawUsername, password, name } = await request.json()
+    const parsed = await readJsonBody(request, 4 * 1024)
+    if (parsed.error) return parsed.error
+    const { username: rawUsername, password, name } = parsed.data
     const username = (rawUsername || '').toString().trim().toLowerCase()
 
     if (!username || !password) {
       return NextResponse.json({ error: 'Username and password are required' }, { status: 400 })
     }
-    if (username.length < 3) {
-      return NextResponse.json({ error: 'Username must be at least 3 characters' }, { status: 400 })
+    if (username.length < 3 || username.length > 32) {
+      return NextResponse.json({ error: 'Username must be 3–32 characters' }, { status: 400 })
     }
     if (!/^[a-z0-9._-]+$/.test(username)) {
       return NextResponse.json({ error: 'Username may only contain letters, numbers, and . _ -' }, { status: 400 })
     }
-    if (String(password).length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    const pwLen = String(password).length
+    if (pwLen < 6 || pwLen > 200) {
+      return NextResponse.json({ error: 'Password must be 6–200 characters' }, { status: 400 })
     }
 
     // Username is stored in the `email` column (legacy field reused).
