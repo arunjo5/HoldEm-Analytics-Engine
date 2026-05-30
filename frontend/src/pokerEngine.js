@@ -5,7 +5,7 @@ export const RANK = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J'
 const SUIT_INDEX = { s:0, h:1, d:2, c:3 };
 const VALUE_INDEX = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'T':8,'J':9,'Q':10,'K':11,'A':12 };
 
-function cardToId(c) {
+export function cardToId(c) {
   return VALUE_INDEX[c.v] * 4 + SUIT_INDEX[c.s];
 }
 
@@ -49,7 +49,7 @@ const PLAYER_C1 = new Uint8Array(MAX_PLAYERS);
 const PLAYER_IDX = new Int8Array(MAX_PLAYERS);
 const SCORES = new Int32Array(MAX_PLAYERS);
 
-function evaluate7(c0, c1, c2, c3, c4, c5, c6) {
+export function evaluate7(c0, c1, c2, c3, c4, c5, c6) {
   VCOUNT.fill(0);
   SCOUNT.fill(0);
   SUIT_MASKS.fill(0);

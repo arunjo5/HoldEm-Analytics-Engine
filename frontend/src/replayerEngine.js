@@ -215,23 +215,25 @@ function nameOrPos(setup, seat) {
 // Build human-readable action description (computed AFTER apply, using pre-state values passed in).
 function describeAction(setup, action, pre) {
   const who = nameOrPos(setup, action.seat);
-  const round2 = (x) => Math.round(x * 100) / 100;
+  // PokerNow hands hold amounts in cents (real money — 2 decimals); chips otherwise.
+  const m = (x) => setup.cents ? (x / 100).toFixed(2) : Math.round(x * 100) / 100;
   switch (action.type) {
     case 'fold': return `${who} folds`;
     case 'check': return `${who} checks`;
     case 'call': {
       const owe = pre.toCall - pre.streetContrib;
       const amt = Math.min(Math.max(owe, 0), pre.stack);
-      return `${who} calls ${round2(amt)}`;
+      return `${who} calls ${m(amt)}`;
     }
-    case 'bet': return `${who} bets ${round2(action.amount)}`;
-    case 'raise': return `${who} raises to ${round2(action.amount)}`;
+    case 'bet': return `${who} bets ${m(action.amount)}`;
+    case 'raise': return `${who} raises to ${m(action.amount)}`;
     default: return who;
   }
 }
 
-// Full replay → ordered frames for playback.
-function buildReplay(setup, actions, board) {
+// Full replay → ordered frames for playback. When runTwice is set the board is
+// NOT auto-dealt at the all-in — the replayer runs each board out itself.
+function buildReplay(setup, actions, board, runTwice) {
   const st = initState(setup);
   const frames = [];
   frames.push(snapshot(st, {
@@ -269,7 +271,7 @@ function buildReplay(setup, actions, board) {
   }
 
   // Run out remaining board if multiple players are all-in (no more actions).
-  if (!st.handOver && liveActorCount(st) <= 1 && activeCount(st) >= 2) {
+  if (!runTwice && !st.handOver && liveActorCount(st) <= 1 && activeCount(st) >= 2) {
     while (st.boardDealt < 5 && board.length >= STREET_BOARD[st.street + 1]) {
       advanceStreet(st, board);
       frames.push(snapshot(st, {

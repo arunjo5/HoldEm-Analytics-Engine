@@ -25,8 +25,8 @@ const ALL_RANGE_KEYS = (() => {
 // (BTN) sits at the bottom, near the viewer.
 function replaySeatPositions(n) {
   const cx = 50, cy = 50;
-  const rx_pct = 42, ry_pct = 36;
-  const STAGE_W = 1060, STAGE_H = 600;
+  const rx_pct = 44, ry_pct = 35; // same ellipse as the main calculator table
+  const STAGE_W = 1080, STAGE_H = 600;
   const rxPx = (rx_pct / 100) * STAGE_W;
   const ryPx = (ry_pct / 100) * STAGE_H;
   const SAMPLES = 4000;
@@ -59,6 +59,13 @@ function fmt(n) {
   if (n == null || isNaN(n)) return '0';
   const r = Math.round(Number(n) * 100) / 100;
   return String(r);
+}
+
+// PokerNow hands carry amounts in cents (real money — show 2 decimals);
+// hand-built replays are in whole chips.
+function fmtMoney(n, setup) {
+  if (setup && setup.cents) return (Number(n) / 100).toFixed(2);
+  return fmt(n);
 }
 
 // Equity among non-folded players. Every active player must have known cards
@@ -117,6 +124,11 @@ function useFrameEquity(setup, board, frame) {
 }
 
 // Local stage scaler (keeps the table a fixed canvas, letterboxed).
+// The felt is 1060x600, but seats (cards + plates) poke past its top/bottom
+// edge. Scale to a taller canvas so those overhangs never get clipped.
+const STAGE_W = 1080, STAGE_FELT_H = 600, STAGE_PAD_Y = 36;
+const STAGE_H = STAGE_FELT_H + STAGE_PAD_Y * 2;
+
 function ReplayStage({ children }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
@@ -126,7 +138,7 @@ function ReplayStage({ children }) {
       if (!el || !el.parentElement) return;
       const w = el.parentElement.clientWidth - 8;
       const h = el.parentElement.clientHeight - 8;
-      const s = Math.min(w / 1060, h / 600, 1.15);
+      const s = Math.min(w / STAGE_W, h / STAGE_H, 1.15);
       setScale(s > 0 ? s : 1);
     }
     update();
@@ -136,8 +148,8 @@ function ReplayStage({ children }) {
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
   return (
-    <div ref={ref} className="replay-stage-scaler" style={{ width: 1060 * scale, height: 600 * scale }}>
-      <div className="replay-stage-inner" style={{ width: 1060, height: 600, transform: `scale(${scale})` }}>
+    <div ref={ref} className="replay-stage-scaler" style={{ width: STAGE_W * scale, height: STAGE_H * scale }}>
+      <div className="replay-stage-inner" style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${scale})` }}>
         {children}
       </div>
     </div>
@@ -145,23 +157,28 @@ function ReplayStage({ children }) {
 }
 
 // Chip stack glyph for bets in front of players.
-function BetChip({ amount }) {
+function BetChip({ amount, money }) {
   if (!amount) return null;
   return (
     <div className="replay-bet">
       <span className="replay-bet-dot" />
-      {fmt(amount)}
+      {(money || fmt)(amount)}
     </div>
   );
 }
 
-function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner }) {
+function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner, resultWon, twice }) {
   const s = setup.seats[seat];
   const folded = frame.folded[seat];
   const allin = frame.allin[seat];
   const known = s.cards && s.cards.length === 2;
   const eqPct = equity && equity[seat] ? equity[seat].equity : null;
-  const showEq = !folded && eqPct != null;
+  const money = (n) => fmtMoney(n, setup);
+  // When a result is on screen, swap the equity bar for the amount won; hide
+  // equity entirely while the boards are being run out (it would be misleading).
+  const wonAmt = resultWon && resultWon[seat] ? resultWon[seat] : 0;
+  const showResult = !!resultWon;
+  const showEq = !folded && eqPct != null && !showResult && !twice;
   return (
     <div
       className={'replay-seat' + (folded ? ' folded' : '') + (isActing ? ' acting' : '') + (isWinner ? ' winner' : '')}
@@ -169,8 +186,8 @@ function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner }) {
     >
       <div className="replay-seat-cards">
         {known
-          ? s.cards.map((c, i) => <PlayingCard key={i} card={c} size="md" dim={folded} />)
-          : <><CardBack size="md" /><CardBack size="md" /></>}
+          ? s.cards.map((c, i) => <PlayingCard key={i} card={c} size="mdr" dim={folded} />)
+          : <><CardBack size="mdr" /><CardBack size="mdr" /></>}
       </div>
       <div className="replay-seat-plate">
         <div className="replay-seat-top">
@@ -179,8 +196,11 @@ function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner }) {
         </div>
         <div className="replay-seat-stack">
           {allin && !folded ? <span className="replay-allin">ALL-IN</span> : null}
-          <span className="replay-stack-num">{fmt(frame.stacks[seat])}</span>
+          <span className="replay-stack-num">{money(frame.stacks[seat])}</span>
         </div>
+        {showResult && wonAmt > 0 && (
+          <div className="replay-seat-win">{'+$' + money(wonAmt)}</div>
+        )}
         {showEq && (
           <div className="replay-seat-eq">
             <div className="replay-eq-bar"><div className="replay-eq-fill" style={{ width: eqPct + '%' }} /></div>
@@ -188,32 +208,63 @@ function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner }) {
           </div>
         )}
       </div>
-      <BetChip amount={frame.streetContrib[seat]} />
+      <BetChip amount={frame.streetContrib[seat]} money={money} />
       {seat === 0 && <span className="replay-dealer-btn" title="Dealer">D</span>}
     </div>
   );
 }
 
-function ReplayTable({ setup, board, frame, equity, winners }) {
+const STREET_OF = { 3: 'Flop', 4: 'Turn', 5: 'River' };
+// Run-it-twice playback: only after the action is done, reveal two boards and
+// run them one after the other; tag each result frame with that board's payout.
+function buildRunTwiceFrames(base, runResults) {
+  const shared = base.boardDealt;
+  const steps = [3, 4, 5].filter(c => c > shared);
+  const mk = (extra) => Object.assign({}, base, { actingSeat: null, kind: 'deal', twice: true }, extra);
+  const frames = [];
+  frames.push(mk({ run1Dealt: shared, run2Dealt: shared, activeRun: 0, streetName: 'Run it twice', label: 'Running it twice' }));
+  for (const c of steps) frames.push(mk({ run1Dealt: c, run2Dealt: shared, activeRun: 1, streetName: STREET_OF[c], label: `Run 1 · ${STREET_OF[c]}` }));
+  frames.push(mk({ run1Dealt: 5, run2Dealt: shared, activeRun: 1, kind: 'result', runResult: runResults[0], streetName: 'Run 1', label: 'Run 1 result' }));
+  for (const c of steps) frames.push(mk({ run1Dealt: 5, run2Dealt: c, activeRun: 2, streetName: STREET_OF[c], label: `Run 2 · ${STREET_OF[c]}` }));
+  frames.push(mk({ run1Dealt: 5, run2Dealt: 5, activeRun: 2, kind: 'result', runResult: runResults[1], streetName: 'Run 2', label: 'Run 2 result' }));
+  return frames;
+}
+
+// One community-card row. `dim` marks a run that hasn't been dealt out yet.
+function BoardRow({ cards, vis, size, label, dim }) {
+  const twice = size === 'mdr';
+  return (
+    <div className={'replay-board' + (twice ? ' twice' : '') + (dim ? ' pending' : '')}>
+      {label && <span className="replay-run-tag">{label}</span>}
+      {Array.from({ length: 5 }).map((_, i) => (
+        i < vis && cards[i]
+          ? <PlayingCard key={i} card={cards[i]} size={size} />
+          : <div key={i} className="replay-board-empty" />
+      ))}
+    </div>
+  );
+}
+
+function ReplayTable({ setup, board, board2, frame, equity, winners, resultWon }) {
   const positions = useMemo(() => replaySeatPositions(setup.seats.length), [setup.seats.length]);
-  const vis = frame.boardDealt;
   return (
     <ReplayStage>
-      <div className="replay-table">
+      <div className="replay-table" style={{ top: STAGE_PAD_Y }}>
         <div className="felt-rim" />
         <div className="felt" />
         <div className="replay-center">
           <div className="replay-pot">
             <span className="replay-pot-label">POT</span>
-            <span className="replay-pot-val">{fmt(frame.pot)}</span>
+            <span className="replay-pot-val">{fmtMoney(frame.pot, setup)}</span>
           </div>
-          <div className="replay-board">
-            {Array.from({ length: 5 }).map((_, i) => (
-              i < vis && board[i]
-                ? <PlayingCard key={i} card={board[i]} size="lg" />
-                : <div key={i} className="replay-board-empty" />
-            ))}
-          </div>
+          {frame.twice ? (
+            <div className="replay-boards-twice">
+              <BoardRow cards={board} vis={frame.run1Dealt} size="mdr" label="RUN 1" />
+              <BoardRow cards={board2} vis={frame.run2Dealt} size="mdr" label="RUN 2" dim={frame.activeRun < 2} />
+            </div>
+          ) : (
+            <BoardRow cards={board} vis={frame.boardDealt} size="lgr" />
+          )}
           <div className="replay-street-tag">{frame.streetName}</div>
         </div>
         {positions.map((pos, k) => (
@@ -226,6 +277,8 @@ function ReplayTable({ setup, board, frame, equity, winners }) {
             equity={equity}
             isActing={frame.actingSeat === k}
             isWinner={winners && winners.includes(k)}
+            resultWon={resultWon}
+            twice={!!frame.twice}
           />
         ))}
       </div>
@@ -656,7 +709,7 @@ function makeSeats(n, bb) {
 }
 
 // Top-level: builder → playback.
-export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
+export function ReplayerView({ initialHand, onExit, onSaveToHistory, userMenu, historyDrawer }) {
   const [hand, setHand] = useState(initialHand || null); // { setup, actions, board }
   const [idx, setIdx] = useState(0);
   const [saved, setSaved] = useState(!!(initialHand && initialHand.savedId));
@@ -666,16 +719,31 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
 
   const frames = useMemo(() => {
     if (!hand) return [];
-    try { return ReplayEngine.buildReplay(hand.setup, hand.actions, hand.board); }
-    catch (e) { return []; }
+    const twice = !!(hand.board2 && hand.runResults);
+    try {
+      const base = ReplayEngine.buildReplay(hand.setup, hand.actions, hand.board, twice);
+      if (twice) return base.concat(buildRunTwiceFrames(base[base.length - 1], hand.runResults));
+      return base;
+    } catch (e) { return []; }
   }, [hand]);
 
   const frame = frames[idx] || null;
   const equity = useFrameEquity(hand ? hand.setup : { seats: [] }, hand ? hand.board : [], frame);
 
-  // Winners (for highlight) only meaningful on the last frame.
+  // Amount won shown on this frame: per-board on a run-twice result frame,
+  // otherwise the total on a single-board hand's final frame.
+  const resultWon = useMemo(() => {
+    if (!frame) return null;
+    if (frame.runResult) return frame.runResult.won;
+    if (!hand.board2 && hand.won && idx === frames.length - 1) return hand.won;
+    return null;
+  }, [frame, idx, frames.length, hand]);
+
+  // Winner highlight: from the recorded payout when we have one, else best equity at showdown.
   const winners = useMemo(() => {
-    if (!frame || idx !== frames.length - 1) return null;
+    if (!frame) return null;
+    if (resultWon) return Object.keys(resultWon).filter(k => resultWon[k] > 0).map(Number);
+    if (idx !== frames.length - 1 || hand.won) return null;
     const active = [];
     for (let i = 0; i < hand.setup.seats.length; i++) if (!frame.folded[i]) active.push(i);
     if (active.length === 1) return active;
@@ -689,7 +757,7 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
       return bestIdx;
     }
     return null;
-  }, [frame, idx, frames.length, equity, hand]);
+  }, [frame, idx, frames.length, equity, hand, resultWon]);
 
   const go = useCallback((n) => {
     setIdx(prev => Math.max(0, Math.min(frames.length - 1, n)));
@@ -712,6 +780,11 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
 
   // Reset index when a new hand loads
   useEffect(() => { setIdx(0); }, [hand]);
+
+  // Load a different hand chosen from history while the replayer is already open.
+  useEffect(() => {
+    if (initialHand) { setHand(initialHand); setSaved(!!initialHand.savedId); }
+  }, [initialHand]);
 
   function handleComplete(setup, actions, board) {
     setHand({ setup, actions, board });
@@ -736,10 +809,11 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
   if (!hand) {
     return (
       <div className="replayer">
-        <ReplayerHeader onExit={onExit} title="Hand Replayer" />
+        <ReplayerHeader onExit={onExit} title="Hand Replayer" right={userMenu} />
         <div className="replayer-builder-wrap">
           <HandBuilder onComplete={handleComplete} onCancel={onExit} />
         </div>
+        {historyDrawer}
       </div>
     );
   }
@@ -762,12 +836,14 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
             <button className="btn btn-primary" onClick={saveToHistory} disabled={saved}>
               {saved ? '✓ Favorited' : 'Favorite'}
             </button>
+            {userMenu && <span className="topbar-divider" />}
+            {userMenu}
           </>
         }
       />
       <div className="replayer-body">
         <div className="replayer-table-wrap">
-          {frame && <ReplayTable setup={hand.setup} board={hand.board} frame={frame} equity={equity} winners={winners} />}
+          {frame && <ReplayTable setup={hand.setup} board={hand.board} board2={hand.board2} frame={frame} equity={equity} winners={winners} resultWon={resultWon} />}
         </div>
         {frame && (
           <TransportBar
@@ -788,6 +864,7 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory }) {
         </div>
       )}
       <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      {historyDrawer}
     </div>
   );
 }
@@ -846,7 +923,10 @@ export function buildReplaySummary(hand, frames, equity) {
 
 // Replay share encode/decode (full hand in the URL hash)
 export function encodeReplay(hand) {
-  const json = JSON.stringify({ s: hand.setup, a: hand.actions, b: hand.board });
+  const json = JSON.stringify({
+    s: hand.setup, a: hand.actions, b: hand.board,
+    b2: hand.board2 || undefined, w: hand.won || undefined, rr: hand.runResults || undefined,
+  });
   return btoa(unescape(encodeURIComponent(json)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -856,7 +936,7 @@ export function decodeReplay(str) {
     while (s.length % 4) s += '=';
     const o = JSON.parse(decodeURIComponent(escape(atob(s))));
     if (!o.s || !o.a || !o.b) return null;
-    return { setup: o.s, actions: o.a, board: o.b };
+    return { setup: o.s, actions: o.a, board: o.b, board2: o.b2 || null, won: o.w || null, runResults: o.rr || null };
   } catch (e) { return null; }
 }
 export function readReplayFromUrl() {

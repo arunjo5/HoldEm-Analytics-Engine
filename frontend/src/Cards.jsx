@@ -43,7 +43,10 @@ const CARD_SIZES = {
   xs: { w: 24, h: 32, rank: 13, suit: 13, pad: 2, radius: 3 },
   sm: { w: 32, h: 44, rank: 16, suit: 15, pad: 3, radius: 4 },
   md: { w: 50, h: 68, rank: 24, suit: 22, pad: 4, radius: 6 },
+  // replayer: a touch larger than md / lg
+  mdr: { w: 55, h: 75, rank: 26, suit: 24, pad: 4, radius: 6 },
   lg: { w: 64, h: 88, rank: 30, suit: 28, pad: 5, radius: 8 },
+  lgr: { w: 70, h: 96, rank: 33, suit: 30, pad: 5, radius: 8 },
   xl: { w: 80, h: 110, rank: 38, suit: 34, pad: 6, radius: 10 },
 };
 
@@ -103,7 +106,9 @@ const BACK_SIZES = {
   xs: { w: 24, h: 32, radius: 3 },
   sm: { w: 32, h: 44, radius: 4 },
   md: { w: 50, h: 68, radius: 6 },
+  mdr: { w: 55, h: 75, radius: 6 },
   lg: { w: 64, h: 88, radius: 8 },
+  lgr: { w: 70, h: 96, radius: 8 },
   xl: { w: 80, h: 110, radius: 10 },
 };
 
@@ -150,5 +155,16 @@ export function EmptyCardSlot({ size = 'md', label = '+', active = false }) {
     >
       {label}
     </div>
+  );
+}
+
+// compact inline card for dense lists
+export function CardChip({ card }) {
+  const red = SUIT_RED[card.s];
+  return (
+    <span className={'card-chip ' + (red ? 'red' : 'ink')}>
+      <span className="card-chip-rank">{card.v === 'T' ? '10' : card.v}</span>
+      <SuitGlyph suit={card.s} size={10} color="currentColor" />
+    </span>
   );
 }

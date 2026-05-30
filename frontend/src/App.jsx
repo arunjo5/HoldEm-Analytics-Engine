@@ -6,6 +6,7 @@ import { PlayerSeat } from './Seat.jsx';
 import { useAuth } from './AuthContext.jsx';
 import { HistoryDrawer } from './HistoryDrawer.jsx';
 import { ShareModal } from './ShareModal.jsx';
+import { UploadModal } from './UploadModal.jsx';
 import { ReplayerView, readReplayFromUrl } from './Replayer.jsx';
 import {
   encodeScenario,
@@ -23,7 +24,7 @@ const THEME_KEY = 'holdem_theme_v1';
 const SEAT_POSITIONS = (() => {
   const N = 9;
   const cx_pct = 50, cy_pct = 50;
-  const rx_pct = 44, ry_pct = 38;
+  const rx_pct = 44, ry_pct = 35; // ry pulled in slightly so apex seats clear the toolbar / results panel
   const STAGE_W = 1080, STAGE_H = 600;
   const rxPx = (rx_pct / 100) * STAGE_W;
   const ryPx = (ry_pct / 100) * STAGE_H;
@@ -101,6 +102,8 @@ export default function App() {
   const [showShare, setShowShare] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [sharedToast, setSharedToast] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [importToast, setImportToast] = useState(null);
 
   // ── Auto-load a scenario (or shared replay) from the URL hash on first mount ──
   useEffect(() => {
@@ -203,6 +206,7 @@ export default function App() {
     const sc = decodeScenario(item.scenario);
     if (!sc) return;
     commitToHistory(); // save whatever hand was in progress before replacing it
+    setView('calc'); // a calculator scenario opens in the calculator, even from the replayer
     setPlayers(sc.players);
     setBoard(sc.board);
     setPlayerNames(sc.playerNames);
@@ -255,6 +259,44 @@ export default function App() {
     } catch {
       /* swallow — replayer shows its own optimistic "Saved" toast */
     }
+  }
+
+  function openUpload() {
+    if (!user) { signIn(); return; }
+    setUploadOpen(true);
+  }
+
+  // save each imported hand as a favorited replay, then open history
+  async function onImportConfirm(chosen) {
+    setUploadOpen(false);
+    let saved = 0;
+    for (const h of chosen) {
+      const seats = (h.replay && h.replay.setup && h.replay.setup.seats) || [];
+      const playersForRow = seats.map(s =>
+        s.cards && s.cards.length === 2 ? { kind: 'hand', hand: s.cards } : null
+      );
+      try {
+        const r = await fetch('/api/searches', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `PokerNow #${h.number}`,
+            players: playersForRow,
+            board: (h.replay && h.replay.board) || [],
+            odds: {},
+            isReplay: true,
+            replay: h.replay,
+            favorite: true,
+          }),
+        });
+        if (r.ok) saved++;
+      } catch { /* skip a failed hand, keep importing the rest */ }
+    }
+    await refreshHistory();
+    setShowHistory(true);
+    setImportToast(`${saved} hand${saved === 1 ? '' : 's'} added to history`);
+    setTimeout(() => setImportToast(null), 3200);
   }
 
   useEffect(() => {
@@ -557,6 +599,33 @@ export default function App() {
     setBoard(newBoard);
   }
 
+  // Profile menu + history drawer — shared between the calculator and the replayer
+  // so a user can open another hand from history without leaving the replayer.
+  const userMenuEl = user ? (
+    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} />
+  ) : (
+    <button className="btn btn-signin" onClick={signIn}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
+      </svg>
+      Sign in
+    </button>
+  );
+  const historyDrawerEl = (
+    <HistoryDrawer
+      open={showHistory}
+      onClose={() => setShowHistory(false)}
+      history={history}
+      loading={historyLoading}
+      error={historyError}
+      onLoad={loadHistoryItem}
+      onToggleFavorite={toggleFavorite}
+      onDelete={deleteHistoryItem}
+      onClear={clearAllUnfavorited}
+      user={user}
+    />
+  );
+
   // The replayer takes over the whole screen when active.
   if (view === 'replayer') {
     return (
@@ -564,6 +633,8 @@ export default function App() {
         initialHand={replayHand}
         onExit={() => setView('calc')}
         onSaveToHistory={saveReplayToHistory}
+        userMenu={userMenuEl}
+        historyDrawer={historyDrawerEl}
       />
     );
   }
@@ -595,6 +666,13 @@ export default function App() {
             </svg>
             Share
           </button>
+          <button className="btn btn-ghost btn-upload" onClick={openUpload} title="Import hands from a PokerNow log">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 16V4" /><path d="M7 9l5-5 5 5" />
+              <path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+            </svg>
+            Upload log
+          </button>
           {user && (
             <button className="btn btn-primary" onClick={saveHand} disabled={saving}>
               {saving ? 'Saving…' : 'Favorite'}
@@ -604,16 +682,7 @@ export default function App() {
             {theme === 'dark' ? '☀' : '☾'}
           </button>
           <div className="topbar-divider" />
-          {user ? (
-            <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} />
-          ) : (
-            <button className="btn btn-signin" onClick={signIn}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
-              </svg>
-              Sign in
-            </button>
-          )}
+          {userMenuEl}
         </div>
       </div>
 
@@ -702,19 +771,9 @@ export default function App() {
         </div>
       )}
 
-      <HistoryDrawer
-        open={showHistory}
-        onClose={() => setShowHistory(false)}
-        history={history}
-        loading={historyLoading}
-        error={historyError}
-        onLoad={loadHistoryItem}
-        onToggleFavorite={toggleFavorite}
-        onDelete={deleteHistoryItem}
-        onClear={clearAllUnfavorited}
-        user={user}
-      />
+      {historyDrawerEl}
       <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onConfirm={onImportConfirm} />
       <SaveModal
         open={saveModalOpen}
         busy={saving}
@@ -723,12 +782,12 @@ export default function App() {
         onSave={doSave}
       />
 
-      {sharedToast && (
+      {(sharedToast || importToast) && (
         <div className="shared-toast">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          Loaded shared scenario
+          {importToast || 'Loaded shared scenario'}
         </div>
       )}
     </div>
