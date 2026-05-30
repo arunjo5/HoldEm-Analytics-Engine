@@ -1,4 +1,4 @@
-## Poker Analytics Engine
+## PokerLab
 
 #### **[▶ Click to visit](https://holdemanalytics.vercel.app/)** 
 
