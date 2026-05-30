@@ -123,16 +123,100 @@ function combosFromKeys(keys) {
   return n;
 }
 
-const PRESETS = [
-  { label: 'Empty', keys: [] },
-  { label: 'Top 5%', keys: ['AA','KK','QQ','JJ','TT','AKs','AKo','AQs'] },
-  { label: 'Top 10%', keys: ['AA','KK','QQ','JJ','TT','99','88','AKs','AKo','AQs','AQo','AJs','KQs'] },
-  { label: 'Top 20%', keys: ['AA','KK','QQ','JJ','TT','99','88','77','66','55','AKs','AKo','AQs','AQo','AJs','AJo','ATs','KQs','KQo','KJs','KTs','QJs','QTs','JTs','T9s','98s','87s','76s','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s'] },
-  { label: 'Pairs only', keys: ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22'] },
-  { label: 'Suited Ax', keys: ['A2s','A3s','A4s','A5s','A6s','A7s','A8s','A9s','ATs','AJs','AQs','AKs'] },
-  { label: 'Broadways', keys: ['AKs','AQs','AJs','ATs','KQs','KJs','KTs','QJs','QTs','JTs','AKo','AQo','AJo','ATo','KQo','KJo','KTo','QJo','QTo','JTo'] },
-  { label: 'All hands', keys: 'ALL' },
+// Expand standard range notation ("44+, A2s+, K9s+, T9s, ATo+, A4s-A5s") into hand keys.
+const RIDX = Object.fromEntries(RANK_ORDER.map((r, i) => [r, i])); // A=0 (best) … 2=12
+
+function expandToken(tok) {
+  tok = tok.trim();
+  if (!tok) return [];
+  if (tok.includes('-')) { // dash range, e.g. 55-99 or A4s-A5s
+    const [a, b] = tok.split('-').map(s => s.trim());
+    const out = [];
+    if (a.length === 2 && a[0] === a[1]) {
+      for (let i = Math.min(RIDX[a[0]], RIDX[b[0]]); i <= Math.max(RIDX[a[0]], RIDX[b[0]]); i++) out.push(RANK_ORDER[i] + RANK_ORDER[i]);
+    } else {
+      const hi = a[0], suit = a[2]; // same high card + suitedness, varying low card
+      for (let i = Math.min(RIDX[a[1]], RIDX[b[1]]); i <= Math.max(RIDX[a[1]], RIDX[b[1]]); i++) out.push(hi + RANK_ORDER[i] + suit);
+    }
+    return out;
+  }
+  const plus = tok.endsWith('+');
+  const core = plus ? tok.slice(0, -1) : tok;
+  if (core.length === 2 && core[0] === core[1]) { // pair
+    if (!plus) return [core];
+    const out = [];
+    for (let i = RIDX[core[0]]; i >= 0; i--) out.push(RANK_ORDER[i] + RANK_ORDER[i]);
+    return out;
+  }
+  const hi = core[0], lo = core[1], suit = core[2]; // suited / offsuit
+  if (!plus) return [hi + lo + suit];
+  const out = [];
+  for (let i = RIDX[lo]; i > RIDX[hi]; i--) out.push(hi + RANK_ORDER[i] + suit);
+  return out;
+}
+
+function expandNotation(notation) {
+  const out = new Set();
+  for (const tok of notation.split(',')) for (const k of expandToken(tok)) out.add(k);
+  return [...out];
+}
+
+// Standard RFI (raise-first-in) opening ranges by position.
+const POS_6MAX = [
+  ['UTG',         '44+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, ATo+, KJo+'],
+  ['UTG+1',       '22+, A2s+, K8s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, 65s, 54s, ATo+, KTo+, QJo, JTo'],
+  ['Cutoff',      '22+, A2s+, K6s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 65s, 54s, 43s, 32s, A8o+, A5o, KTo+, QTo+, JTo, T9o, 98o'],
+  ['Button',      '22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 95s+, 85s+, 74s+, 63s+, 53s+, 43s, 32s, A2o+, K7o+, Q9o+, J9o+, T9o, 98o'],
+  ['Small Blind', '22+, A2s+, K2s+, Q3s+, J4s+, T4s+, 94s+, 84s+, 73s+, 63s+, 53s+, 43s, 32s, A2o+, K4o+, Q8o+, J9o+, T9o, 98o'],
 ];
+const POS_9MAX = [
+  ['UTG',         '77+, ATs+, A5s, KTs+, QTs+, J9s+, T9s, 98s, AQo+'],
+  ['UTG+1',       '77+, ATs+, A5s, KTs+, QTs+, J9s+, T9s, 98s, AQo+'],
+  ['UTG+2',       '77+, A8s+, A4s-A5s, K9s+, Q9s+, J9s+, T9s, 98s, AJo+'],
+  ['Lojack',      '44+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, ATo+, KJo+'],
+  ['Hijack',      '22+, A2s+, K8s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, 65s, 54s, ATo+, KTo+, QJo, JTo'],
+  ['Cutoff',      '22+, A2s+, K6s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 65s, 54s, 43s, 32s, A8o+, A5o, KTo+, QTo+, JTo, T9o, 98o'],
+  ['Button',      '22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 95s+, 85s+, 74s+, 63s+, 53s+, 43s, 32s, A2o+, K7o+, Q9o+, J9o+, T9o, 98o'],
+  ['Small Blind', '22+, A2s+, K2s+, Q3s+, J4s+, T4s+, 94s+, 84s+, 73s+, 63s+, 53s+, 43s, 32s, A2o+, K4o+, Q8o+, J9o+, T9o, 98o'],
+];
+
+const PRESET_GROUPS = [
+  { label: '6-max opening ranges', presets: POS_6MAX.map(([label, n]) => ({ label, keys: expandNotation(n) })) },
+  { label: '9-max opening ranges', presets: POS_9MAX.map(([label, n]) => ({ label, keys: expandNotation(n) })) },
+];
+
+// Themed preset dropdown (replaces the native <select> so it matches the app).
+function PresetMenu({ groups, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div className="preset-menu-wrap" ref={ref}>
+      <button type="button" className="preset-trigger" onClick={() => setOpen(o => !o)}>
+        Preset… <span className="preset-caret">▾</span>
+      </button>
+      {open && (
+        <div className="preset-menu">
+          {groups.map(g => (
+            <div key={g.label} className="preset-group">
+              <div className="preset-group-label">{g.label}</div>
+              {g.presets.map(p => (
+                <button type="button" key={p.label} className="preset-item" onClick={() => { onPick(p); setOpen(false); }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function RangePicker({ initial, onCancel, onSave }) {
   const [keys, setKeys] = useState(() => new Set(initial || []));
@@ -182,14 +266,7 @@ export function RangePicker({ initial, onCancel, onSave }) {
           <div className="picker-sub">{totalCombos} combos · {pct.toFixed(1)}% of all hands</div>
         </div>
         <div className="range-presets">
-          <select onChange={e => {
-            const p = PRESETS[parseInt(e.target.value, 10)];
-            if (p) applyPreset(p);
-            e.target.value = '';
-          }} defaultValue="">
-            <option value="" disabled>Preset…</option>
-            {PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
-          </select>
+          <PresetMenu groups={PRESET_GROUPS} onPick={applyPreset} />
         </div>
       </div>
 
