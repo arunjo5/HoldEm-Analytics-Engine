@@ -1,10 +1,10 @@
-## Hold'Em Analytics Engine
+## Poker Analytics Engine
 
 #### **[▶ Click to visit](https://holdemanalytics.vercel.app/)** 
 
-#### Texas Hold'Em analytics platform for hand equity, range vs. range equity, and pot odds.
+#### Texas Hold'Em analytics platform for hand equity, range vs. range equity, pot odds/MDF, and street-by-street hand replay.
 
-<img width="1200" alt="Screenshot 2026-05-23 at 6 44 05 PM" src="https://github.com/user-attachments/assets/2e0ecbcb-5038-46c4-b11c-f137058940dd" />
+<img width="1200" alt="Screenshot 2026-05-30 at 2 03 04 AM" src="https://github.com/user-attachments/assets/5505da9a-f9bb-40d4-b4f2-aaff6499af41" />
 
 ## Quick start guide
 
