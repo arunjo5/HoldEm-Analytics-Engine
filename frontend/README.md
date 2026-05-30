@@ -36,6 +36,8 @@ frontend/
     ├── App.jsx             top-level layout, state, picker modals
     ├── styles.css          all styles (dark + light themes via .light class)
     ├── pokerEngine.js      deck, 7-card evaluator, Monte Carlo equity
+    ├── replayerEngine.js   betting/positions/frame logic for the replayer
+    ├── Replayer.jsx        hand builder + step-through playback
     ├── Cards.jsx           PlayingCard, CardBack, EmptyCardSlot, SuitGlyph
     ├── Pickers.jsx         CardPicker (52-card grid) + RangePicker (13x13)
     └── Seat.jsx            PlayerSeat + RangeMini thumbnail

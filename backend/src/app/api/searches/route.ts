@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-// Max non-favorite saved hands kept per user. Favorites are never pruned.
-const SAVE_CAP = 100
+// Max total saved hands kept per user. When over the cap, non-favorites are
+// pruned (oldest first) before favorites — favorites only get dropped if the
+// favorites alone exceed the cap.
+const SAVE_CAP = 250
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
     const userId = session.user.id
 
-    const { name, players, board, odds, playerNames, scenario } = await request.json()
+    const { name, players, board, odds, playerNames, scenario, isReplay, replay, favorite } = await request.json()
 
     if (!players || !board || !odds) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -27,14 +29,20 @@ export async function POST(request: NextRequest) {
         odds: odds as any,
         playerNames: (playerNames ?? null) as any,
         scenario: scenario ?? null,
+        isReplay: !!isReplay,
+        replay: (replay ?? null) as any,
+        favorite: !!favorite,
         userId,
       },
     })
 
-    // Prune oldest non-favorite hands beyond the cap so storage stays bounded.
+    // Keep only the top SAVE_CAP hands: favorites rank above non-favorites,
+    // and within each group newer ranks above older. Everything past the cap
+    // is pruned — so non-favorites are dropped (oldest first) before any
+    // favorite is touched.
     const stale = await prisma.search.findMany({
-      where: { userId, favorite: false },
-      orderBy: { createdAt: 'desc' },
+      where: { userId },
+      orderBy: [{ favorite: 'desc' }, { createdAt: 'desc' }],
       skip: SAVE_CAP,
       select: { id: true },
     })

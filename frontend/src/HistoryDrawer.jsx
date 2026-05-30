@@ -32,16 +32,22 @@ function HistoryRow({ item, onLoad, onToggleFavorite, onDelete }) {
   const heroCards = item.heroCards;
   const heroIsRange = !heroCards && item.heroLabel;
   const board = item.boardPreview || [];
+  const isReplay = !!item.isReplay;
   return (
-    <div className={'hist-row ' + (item.starred ? 'starred' : '')}>
+    <div className={'hist-row ' + (item.starred ? 'starred ' : '') + (isReplay ? 'is-replay' : '')}>
       <button className="hist-load" onClick={onLoad}>
         <div className="hist-row-top">
           <div className="hist-row-stage">
-            <span className="hist-stage-dot" />
-            {stageLabel(item.boardLen)}
+            {isReplay
+              ? <span className="hist-replay-badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>REPLAY</span>
+              : <span className="hist-stage-dot" />}
+            {isReplay ? 'Full hand' : stageLabel(item.boardLen)}
             <span className="hist-row-sep">·</span>
             <span className="hist-row-players">{item.playerCount}-way</span>
-            {item.name && (
+            {isReplay && item.blindsLabel && (
+              <><span className="hist-row-sep">·</span><span className="hist-row-players">{item.blindsLabel}</span></>
+            )}
+            {!isReplay && item.name && (
               <>
                 <span className="hist-row-sep">·</span>
                 <span className="hist-row-name">{item.name}</span>
@@ -73,8 +79,11 @@ function HistoryRow({ item, onLoad, onToggleFavorite, onDelete }) {
         <div className="hist-row-meta">
           {item.heroEquity != null
             ? <><span className="hist-equity-pill">{item.heroEquity.toFixed(1)}%</span> hero equity</>
-            : '—'}
-          {item.topName && item.topName !== item.heroName && item.topEquity != null && (
+            : isReplay ? 'Stored hand' : '—'}
+          {isReplay && item.actionCount != null && (
+            <span className="hist-row-meta-sub"> · {item.actionCount} action{item.actionCount === 1 ? '' : 's'} · click to replay</span>
+          )}
+          {!isReplay && item.topName && item.topName !== item.heroName && item.topEquity != null && (
             <span className="hist-row-meta-sub"> · leader {item.topName} {item.topEquity.toFixed(1)}%</span>
           )}
         </div>
@@ -141,6 +150,11 @@ export function HistoryDrawer({
                 ? <>Signed in as <span style={{ color: 'var(--text)' }}>{user.name || user.email}</span> · {history.length} hand{history.length === 1 ? '' : 's'}</>
                 : 'Sign in to sync across devices'}
             </div>
+            {user && (
+              <div className="drawer-sub" style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}>
+                Showing your latest 250 hands (favorites kept first)
+              </div>
+            )}
           </div>
           <button className="modal-x" onClick={onClose} aria-label="Close">×</button>
         </div>
@@ -201,7 +215,7 @@ export function HistoryDrawer({
               <div className="drawer-empty-sub">
                 {filter === 'starred'
                   ? 'Tap the star on any saved hand to keep it here.'
-                  : 'Hit Save while analyzing to keep a hand for later.'}
+                  : 'Hit Favorite while analyzing to keep a hand for later.'}
               </div>
             </div>
           ) : list.map(h => (

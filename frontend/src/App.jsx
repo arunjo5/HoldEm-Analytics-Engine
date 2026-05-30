@@ -6,6 +6,7 @@ import { PlayerSeat } from './Seat.jsx';
 import { useAuth } from './AuthContext.jsx';
 import { HistoryDrawer } from './HistoryDrawer.jsx';
 import { ShareModal } from './ShareModal.jsx';
+import { ReplayerView, readReplayFromUrl } from './Replayer.jsx';
 import {
   encodeScenario,
   decodeScenario,
@@ -14,6 +15,7 @@ import {
 } from './scenario.js';
 
 const NAMES_KEY = 'holdem_player_names_v1';
+const THEME_KEY = 'holdem_theme_v1';
 
 // 9 seats arranged around the felt with EQUAL ARC LENGTH between neighbours
 // (not equal angle) — keeps them evenly spaced even on an elongated felt.
@@ -67,7 +69,9 @@ export default function App() {
   });
   const [picker, setPicker] = useState(null);
   const [boardPicker, setBoardPicker] = useState(null);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem(THEME_KEY) || 'light'; } catch { return 'light'; }
+  });
   const [pot, setPot] = useState('');
   const [callAmt, setCallAmt] = useState('');
   const [oddsMode, setOddsMode] = useState('potOdds');
@@ -90,12 +94,23 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+
+  // ── Replayer: calculator vs. hand replayer view ──
+  const [view, setView] = useState('calc'); // 'calc' | 'replayer'
+  const [replayHand, setReplayHand] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [sharedToast, setSharedToast] = useState(false);
 
-  // ── Auto-load a scenario from the URL hash on first mount ──
+  // ── Auto-load a scenario (or shared replay) from the URL hash on first mount ──
   useEffect(() => {
+    const rep = readReplayFromUrl();
+    if (rep) {
+      setReplayHand(rep);
+      setView('replayer');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      return;
+    }
     const sc = readScenarioFromUrl();
     if (!sc) return;
     setPlayers(sc.players);
@@ -177,6 +192,14 @@ export default function App() {
   }
 
   function loadHistoryItem(item) {
+    // Replays reopen in the replayer instead of loading into the calculator.
+    if (item.isReplay && item.replay) {
+      commitToHistory();
+      setReplayHand({ ...item.replay, savedId: item.id });
+      setView('replayer');
+      setShowHistory(false);
+      return;
+    }
     const sc = decodeScenario(item.scenario);
     if (!sc) return;
     commitToHistory(); // save whatever hand was in progress before replacing it
@@ -198,8 +221,45 @@ export default function App() {
     setShowShare(true);
   }
 
+  function openReplayer() {
+    commitToHistory();
+    setReplayHand(null);
+    setView('replayer');
+    setShowHistory(false);
+  }
+
+  // Persist a replay to history (DB-backed, like a normal saved hand but with
+  // isReplay + the full replay payload). hand = { setup, actions, board }.
+  async function saveReplayToHistory(hand, summary) {
+    if (!user) { signIn(); return; }
+    const seats = (hand.setup && hand.setup.seats) || [];
+    const playersForRow = seats.map(s =>
+      s.cards && s.cards.length === 2 ? { kind: 'hand', hand: s.cards } : null
+    );
+    try {
+      const r = await fetch('/api/searches', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: summary && summary.blindsLabel ? `Replay · ${summary.blindsLabel}` : 'Replay',
+          players: playersForRow,
+          board: hand.board || [],
+          odds: {},
+          isReplay: true,
+          replay: hand,
+          favorite: true,
+        }),
+      });
+      if (r.ok && showHistory) refreshHistory();
+    } catch {
+      /* swallow — replayer shows its own optimistic "Saved" toast */
+    }
+  }
+
   useEffect(() => {
     document.documentElement.classList.toggle('light', theme === 'light');
+    try { localStorage.setItem(THEME_KEY, theme); } catch {}
   }, [theme]);
 
   const usedCards = useMemo(() => {
@@ -396,9 +456,11 @@ export default function App() {
           playerNames,
           scenario,
           odds: results.perPlayer || {},
+          favorite: true,
         }),
       });
       if (!r.ok) throw new Error('save failed');
+      // Mark as already-committed so the boundary auto-save won't duplicate it.
       lastSavedScenarioRef.current = scenario;
       setSaveModalOpen(false);
     } catch {
@@ -495,6 +557,17 @@ export default function App() {
     setBoard(newBoard);
   }
 
+  // The replayer takes over the whole screen when active.
+  if (view === 'replayer') {
+    return (
+      <ReplayerView
+        initialHand={replayHand}
+        onExit={() => setView('calc')}
+        onSaveToHistory={saveReplayToHistory}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <div className="topbar">
@@ -508,8 +581,13 @@ export default function App() {
               <span className="dot-pulse" /> calculating · {results.sims.toLocaleString()} sims
             </div>
           )}
-          <button className="btn btn-ghost" onClick={dealRandom}>Deal sample</button>
           <button className="btn btn-ghost" onClick={clearAll}>Clear all</button>
+          <button className="btn btn-ghost btn-replayer" onClick={openReplayer} title="Open the hand replayer">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Replayer
+          </button>
           <button className="btn btn-ghost btn-share" onClick={openShare} title="Share scenario via link">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
@@ -518,12 +596,9 @@ export default function App() {
             Share
           </button>
           {user && (
-            <>
-              <button className="btn btn-primary" onClick={saveHand} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button className="btn btn-ghost" onClick={openHistory}>History</button>
-            </>
+            <button className="btn btn-primary" onClick={saveHand} disabled={saving}>
+              {saving ? 'Saving…' : 'Favorite'}
+            </button>
           )}
           <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
             {theme === 'dark' ? '☀' : '☾'}
@@ -679,8 +754,8 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
       <div className="share-modal" role="dialog" aria-label="Save hand">
         <div className="share-head">
           <div>
-            <div className="auth-title">Save hand</div>
-            <div className="auth-sub">Give it a name, or leave blank to save as-is.</div>
+            <div className="auth-title">Favorite hand</div>
+            <div className="auth-sub">Star this spot to keep it in history. Name it, or leave blank.</div>
           </div>
           <button className="modal-x" onClick={onClose} disabled={busy} aria-label="Close">×</button>
         </div>
@@ -702,7 +777,7 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={busy}>
-              {busy ? 'Saving…' : 'Save hand'}
+              {busy ? 'Saving…' : 'Favorite'}
             </button>
           </div>
         </form>
@@ -758,6 +833,35 @@ function UserChip({ user, onSignOut, onOpenHistory }) {
 
 // ─── Map a Search row from /api/searches to a HistoryRow item ───
 function toHistoryItem(s) {
+  // Replay rows map straight from the stored replay payload (no equity recompute).
+  if (s.isReplay && s.replay) {
+    const rep = s.replay;
+    const seats = (rep.setup && rep.setup.seats) || [];
+    const repBoard = Array.isArray(rep.board) ? rep.board : [];
+    const heroSeat = seats.findIndex(x => x && x.cards && x.cards.length === 2);
+    const nameOf = (i) => (seats[i] && (seats[i].name || seats[i].pos)) || `Player ${i + 1}`;
+    return {
+      id: s.id,
+      ts: s.createdAt ? new Date(s.createdAt).getTime() : Date.now(),
+      name: s.name || null,
+      isReplay: true,
+      replay: rep,
+      scenario: null,
+      playerCount: seats.length,
+      boardLen: repBoard.length,
+      boardPreview: repBoard.slice(0, 5),
+      heroCards: heroSeat >= 0 ? seats[heroSeat].cards : null,
+      heroLabel: null,
+      heroName: heroSeat >= 0 ? nameOf(heroSeat) : null,
+      heroEquity: null,
+      topName: null,
+      topEquity: null,
+      blindsLabel: rep.setup ? `${rep.setup.sb}/${rep.setup.bb}` : null,
+      actionCount: Array.isArray(rep.actions) ? rep.actions.length : 0,
+      starred: !!s.favorite,
+    };
+  }
+
   const players = Array.isArray(s.players) ? s.players : [];
   const board = Array.isArray(s.board) ? s.board : [];
   const odds = s.odds || {};

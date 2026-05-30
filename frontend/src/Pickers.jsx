@@ -219,7 +219,7 @@ export function RangePicker({ initial, onCancel, onSave }) {
             if (active) {
               if (isPair) style = { background: 'var(--gold)', color: '#1a1208', fontWeight: 600 };
               else if (isSuited) style = { background: 'var(--blue)', color: '#fff', fontWeight: 500 };
-              else style = { background: 'rgba(255,255,255,0.7)', color: '#1a1208', fontWeight: 500 };
+              else style = { background: 'var(--rg-offsuit-on)', color: '#1a1208', fontWeight: 500 };
             }
             return (
               <div

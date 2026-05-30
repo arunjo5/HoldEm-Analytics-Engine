@@ -63,6 +63,8 @@ model Search {
   playerNames Json?
   scenario    String?  @db.Text
   favorite    Boolean  @default(false)
+  isReplay    Boolean  @default(false)
+  replay      Json?
   createdAt   DateTime @default(now())
   name        String?
 }
