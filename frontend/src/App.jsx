@@ -643,8 +643,7 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <div className="brand">
-          <div className="brand-mark"><span className="accent">Hold'</span>Em</div>
-          <div className="brand-sub">Analytics Engine</div>
+          <div className="brand-mark"><span className="accent">Poker</span>Lab</div>
         </div>
         <div className="toolbar">
           {calculating && (
