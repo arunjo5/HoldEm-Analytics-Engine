@@ -949,6 +949,33 @@ body {
   letter-spacing: 0.01em;
   line-height: 1.5;
 }
+.auth-oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font-weight: 500;
+}
+.auth-oauth-btn:hover:not(:disabled) { background: var(--bg-elev); border-color: var(--text-faint); }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.auth-divider::before, .auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 .modal-x {
   background: transparent;
   border: none;
