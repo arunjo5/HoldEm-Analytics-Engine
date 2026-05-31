@@ -14,6 +14,13 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
       )
     }
+    const rlAll = await limit('signupAll', 'all')
+    if (!rlAll.ok) {
+      return NextResponse.json(
+        { error: 'Sign-ups are busy right now. Try again shortly.' },
+        { status: 429, headers: { 'Retry-After': String(rlAll.retryAfter) } }
+      )
+    }
 
     const parsed = await readJsonBody(request, 4 * 1024)
     if (parsed.error) return parsed.error
@@ -30,8 +37,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Username may only contain letters, numbers, and . _ -' }, { status: 400 })
     }
     const pwLen = String(password).length
-    if (pwLen < 6 || pwLen > 200) {
-      return NextResponse.json({ error: 'Password must be 6–200 characters' }, { status: 400 })
+    if (pwLen < 8 || pwLen > 200) {
+      return NextResponse.json({ error: 'Password must be 8–200 characters' }, { status: 400 })
     }
 
     // Username is stored in the `email` column (legacy field reused).
@@ -41,10 +48,11 @@ export async function POST(request: NextRequest) {
     }
 
     const hash = await bcrypt.hash(String(password), 10)
+    const displayName = ((name && String(name).trim()) || username).slice(0, 80)
     const user = await prisma.user.create({
       data: {
         email: username,
-        name: (name && String(name).trim()) || username,
+        name: displayName,
         password: hash,
       },
     })

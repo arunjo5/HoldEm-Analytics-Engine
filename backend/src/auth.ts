@@ -4,15 +4,14 @@ import Google from "next-auth/providers/google"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { limit } from "@/lib/rateLimit"
 
-// Only enable Google when its credentials are configured, so the app still
-// runs locally / in CI before the OAuth secrets are set.
+// only enable Google when configured, so local/CI runs without OAuth secrets
 const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  // Behind the frontend's Vercel rewrite the Host header is the frontend
-  // domain; trust it so NextAuth builds correct callback/cookie URLs.
+  // host header is the frontend domain behind the vercel rewrite; trust it for correct callback/cookie urls
   trustHost: true,
   providers: [
     CredentialsProvider({
@@ -25,8 +24,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const username = (credentials?.username as string)?.toLowerCase().trim()
         const password = credentials?.password as string
         if (!username || !password) return null
-        // Username is stored in the `email` column (legacy field reused as
-        // the unique identifier). Rename the column when adding real email.
+        const rl = await limit("login", `u:${username}`)
+        if (!rl.ok) return null
+        // username stored in the `email` column (legacy field reused as unique id)
         const user = await prisma.user.findUnique({ where: { email: username } })
         if (!user?.password) return null
         const ok = await bcrypt.compare(password, user.password)

@@ -1,8 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-// In-memory fallback, used when Upstash isn't configured or is down.
-// Per-instance and is process-local, so best-effort only.
+// In-memory fallback for when Upstash isn't configured or is unavailable.
 
 type Bucket = { count: number; resetAt: number }
 const buckets = new Map<string, Bucket>()
@@ -27,14 +26,14 @@ export function rateLimit(key: string, limit: number, windowMs: number) {
   return { ok: true, retryAfter: 0 }
 }
 
+// Client IP from the forwarded headers, used as a rate-limit key.
 export function getClientIp(req: Request): string {
   const xff = req.headers.get('x-forwarded-for')
   if (xff) return xff.split(',')[0].trim()
   return req.headers.get('x-real-ip') || 'unknown'
 }
 
-// Upstash sliding window — shared across instances. Activates when the env
-// vars are set, otherwise falls back to the in-memory limiter above.
+// upstash sliding window, shared across instances; falls back to in-memory above when env vars unset
 
 const hasUpstash = !!(
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -44,6 +43,7 @@ const redis = hasUpstash ? Redis.fromEnv() : null
 const LIMITS = {
   login: { n: 10, window: '5 m', ms: 5 * 60_000 },
   signup: { n: 8, window: '60 m', ms: 60 * 60_000 },
+  signupAll: { n: 20, window: '10 m', ms: 10 * 60_000 },
   // keyed by userId; well above normal auto-save volume
   save: { n: 60, window: '1 m', ms: 60_000 },
 } as const
