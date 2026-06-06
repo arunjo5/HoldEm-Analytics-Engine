@@ -61,4 +61,28 @@ describe('scenario encode/decode round-trip', () => {
     expect(out.players.every((p) => p === null)).toBe(true);
     expect(out.board).toEqual([]);
   });
+
+  it('still decodes legacy v1 links', () => {
+    const V1 = 'eyJwIjpbWyJoIiwiQXNBaCJdLFsiciIsWyJLSyIsIlFRIl1dXSwiYiI6IjJzN2hUZCIsIm4iOlsiSGVybyIsIlZpbGxhaW4iXSwicG8iOiIxMjAiLCJjYSI6IjQwIn0';
+    const out = decodeScenario(V1);
+    expect(out.players[0]).toEqual(hand('As', 'Ah'));
+    expect(out.players[1]).toEqual({ kind: 'range', range: ['KK', 'QQ'] });
+    expect(out.board).toEqual([card('2s'), card('7h'), card('Td')]);
+    expect(out.playerNames[0]).toBe('Hero');
+    expect(out.pot).toBe('120');
+    expect(out.callAmt).toBe('40');
+  });
+
+  it('encodes even the full 169-hand range compactly', () => {
+    const R = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+    const all = [];
+    for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) {
+      const a = R[r], b = R[c];
+      all.push(r === c ? a + a : r < c ? a + b + 's' : b + a + 'o');
+    }
+    const enc = encodeScenario({ players: [{ kind: 'range', range: all }], board: [], playerNames: [], pot: '', callAmt: '' });
+    expect(enc.length).toBeLessThan(120);
+    const out = decodeScenario(enc);
+    expect(out.players[0].range.sort()).toEqual([...all].sort());
+  });
 });

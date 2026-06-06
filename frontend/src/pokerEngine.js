@@ -9,6 +9,10 @@ export function cardToId(c) {
   return VALUE_INDEX[c.v] * 4 + SUIT_INDEX[c.s];
 }
 
+export function idToCard(id) {
+  return { v: VALUES[Math.floor(id / 4)], s: SUITS[id % 4] };
+}
+
 export function makeDeck() {
   const d = [];
   for (const v of VALUES) for (const s of SUITS) d.push({ v, s });

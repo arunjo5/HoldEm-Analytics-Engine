@@ -5,6 +5,7 @@ import { ReplayEngine } from './replayerEngine.js';
 import { PlayingCard, CardBack } from './Cards.jsx';
 import { CardPicker } from './Pickers.jsx';
 import { ShareModal } from './ShareModal.jsx';
+import { encodeReplay, decodeReplay } from './replayShare.js';
 
 // All 169 starting-hand keys, for unknown villains (treated as a random range).
 const ALL_RANGE_KEYS = (() => {
@@ -921,24 +922,8 @@ export function buildReplaySummary(hand, frames, equity) {
   };
 }
 
-// Replay share encode/decode (full hand in the URL hash)
-export function encodeReplay(hand) {
-  const json = JSON.stringify({
-    s: hand.setup, a: hand.actions, b: hand.board,
-    b2: hand.board2 || undefined, w: hand.won || undefined, rr: hand.runResults || undefined,
-  });
-  return btoa(unescape(encodeURIComponent(json)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-export function decodeReplay(str) {
-  try {
-    let s = String(str).replace(/-/g, '+').replace(/_/g, '/');
-    while (s.length % 4) s += '=';
-    const o = JSON.parse(decodeURIComponent(escape(atob(s))));
-    if (!o.s || !o.a || !o.b) return null;
-    return { setup: o.s, actions: o.a, board: o.b, board2: o.b2 || null, won: o.w || null, runResults: o.rr || null };
-  } catch (e) { return null; }
-}
+// re-exported from replayShare.js for back-compat
+export { encodeReplay, decodeReplay };
 export function readReplayFromUrl() {
   const h = window.location.hash || '';
   if (h.startsWith('#r=')) return decodeReplay(h.slice(3));
