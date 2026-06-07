@@ -155,7 +155,7 @@ function expandToken(tok) {
   return out;
 }
 
-function expandNotation(notation) {
+export function expandNotation(notation) {
   const out = new Set();
   for (const tok of notation.split(',')) for (const k of expandToken(tok)) out.add(k);
   return [...out];

@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -34,6 +35,7 @@
     "@types/react-dom": "^18.2.19",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
-    "prisma": "^6.14.0"
+    "prisma": "^6.14.0",
+    "vitest": "^3.2.6"
   }
 }
