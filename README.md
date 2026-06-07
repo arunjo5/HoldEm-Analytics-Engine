@@ -1,5 +1,7 @@
 ## PokerLab
 
+[![CI](https://github.com/arunjo5/PokerLab/actions/workflows/ci.yml/badge.svg)](https://github.com/arunjo5/PokerLab/actions/workflows/ci.yml)
+
 #### Texas Hold'Em analytics platform for hand/range equity, pot odds/MDF, and hand-history replay.
 
 <img width="1200" alt="Screenshot 2026-05-30 at 2 03 04 AM" src="https://github.com/user-attachments/assets/5505da9a-f9bb-40d4-b4f2-aaff6499af41" />
