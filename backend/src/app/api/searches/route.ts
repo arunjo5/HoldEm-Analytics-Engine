@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { readJsonBody } from '@/lib/body'
+import { readJsonBody, cleanName } from '@/lib/body'
 import { limit } from '@/lib/rateLimit'
 
 // Per-user row cap. Over this, non-favorites get pruned before favorites.
@@ -11,6 +11,9 @@ const MAX_NAME = 200
 
 export async function POST(request: NextRequest) {
   try {
+    if (request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -44,10 +47,30 @@ export async function POST(request: NextRequest) {
     if (scenario != null && typeof scenario !== 'string') {
       return NextResponse.json({ error: 'Invalid scenario' }, { status: 400 })
     }
+    if (typeof odds !== 'object' || odds === null || Array.isArray(odds)) {
+      return NextResponse.json({ error: 'Invalid odds' }, { status: 400 })
+    }
+    if (
+      playerNames != null &&
+      (!Array.isArray(playerNames) ||
+        playerNames.length > 9 ||
+        playerNames.some((n: any) => n != null && (typeof n !== 'string' || n.length > 100)))
+    ) {
+      return NextResponse.json({ error: 'Invalid playerNames' }, { status: 400 })
+    }
+    if (
+      JSON.stringify(players).length > 16384 ||
+      JSON.stringify(board).length > 2048 ||
+      JSON.stringify(odds).length > 16384 ||
+      (replay != null && JSON.stringify(replay).length > 49152) ||
+      (scenario != null && scenario.length > 16384)
+    ) {
+      return NextResponse.json({ error: 'Field too large' }, { status: 400 })
+    }
 
     const search = await prisma.search.create({
       data: {
-        name: name ?? null,
+        name: name != null ? cleanName(name) : null,
         players: players as any,
         board: board as any,
         odds: odds as any,
@@ -83,6 +106,14 @@ export async function GET() {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const rl = await limit('read', session.user.id)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
     }
 
     const searches = await prisma.search.findMany({

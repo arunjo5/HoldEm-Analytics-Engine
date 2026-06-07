@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { readJsonBody } from '@/lib/body'
+import { readJsonBody, cleanName } from '@/lib/body'
+import { limit } from '@/lib/rateLimit'
 
 const MAX_NAME = 200
 
@@ -14,9 +15,20 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const rl = await limit('save', session.user.id)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
     }
 
     const found = await ownedSearch(session.user.id, params.id)
@@ -29,7 +41,7 @@ export async function PATCH(
     const body = parsed.data
     const data: any = {}
     if (typeof body.favorite === 'boolean') data.favorite = body.favorite
-    if (typeof body.name === 'string' && body.name.length <= MAX_NAME) data.name = body.name
+    if (typeof body.name === 'string' && body.name.length <= MAX_NAME) data.name = cleanName(body.name)
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
@@ -48,9 +60,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const rl = await limit('save', session.user.id)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
     }
 
     const found = await ownedSearch(session.user.id, params.id)

@@ -10,7 +10,7 @@ export async function readJsonBody(
     return { error: NextResponse.json({ error: 'Payload too large' }, { status: 413 }) }
   }
   const raw = await request.text()
-  if (raw.length > maxBytes) {
+  if (Buffer.byteLength(raw, 'utf8') > maxBytes) {
     return { error: NextResponse.json({ error: 'Payload too large' }, { status: 413 }) }
   }
   try {
@@ -18,4 +18,23 @@ export async function readJsonBody(
   } catch {
     return { error: NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   }
+}
+
+export function cleanName(s: string): string {
+  let out = ''
+  for (const ch of s.normalize('NFC')) {
+    const c = ch.codePointAt(0) as number
+    if (
+      c < 0x20 ||
+      (c >= 0x7f && c <= 0x9f) ||
+      (c >= 0x200b && c <= 0x200f) ||
+      (c >= 0x202a && c <= 0x202e) ||
+      (c >= 0x2060 && c <= 0x2064) ||
+      c === 0xfeff
+    ) {
+      continue
+    }
+    out += ch
+  }
+  return out
 }

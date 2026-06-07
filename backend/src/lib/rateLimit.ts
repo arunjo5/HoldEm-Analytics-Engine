@@ -26,11 +26,13 @@ export function rateLimit(key: string, limit: number, windowMs: number) {
   return { ok: true, retryAfter: 0 }
 }
 
-// Client IP from the forwarded headers, used as a rate-limit key.
+// client ip for rate-limit keys; prefer vercel's platform-set x-real-ip
 export function getClientIp(req: Request): string {
+  const realIp = req.headers.get('x-real-ip')
+  if (realIp) return realIp.trim()
   const xff = req.headers.get('x-forwarded-for')
   if (xff) return xff.split(',')[0].trim()
-  return req.headers.get('x-real-ip') || 'unknown'
+  return 'unknown'
 }
 
 // upstash sliding window, shared across instances; falls back to in-memory above when env vars unset
@@ -46,6 +48,7 @@ const LIMITS = {
   signupAll: { n: 20, window: '10 m', ms: 10 * 60_000 },
   // keyed by userId; well above normal auto-save volume
   save: { n: 60, window: '1 m', ms: 60_000 },
+  read: { n: 120, window: '1 m', ms: 60_000 },
 } as const
 
 type Kind = keyof typeof LIMITS

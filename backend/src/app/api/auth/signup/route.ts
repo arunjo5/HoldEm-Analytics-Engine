@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { limit, getClientIp } from '@/lib/rateLimit'
-import { readJsonBody } from '@/lib/body'
+import { readJsonBody, cleanName } from '@/lib/body'
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const hash = await bcrypt.hash(String(password), 10)
-    const displayName = ((name && String(name).trim()) || username).slice(0, 80)
+    const displayName = cleanName((name && String(name).trim()) || username).slice(0, 80)
     const user = await prisma.user.create({
       data: {
         email: username,

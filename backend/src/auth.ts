@@ -4,10 +4,10 @@ import Google from "next-auth/providers/google"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { limit } from "@/lib/rateLimit"
 
 // only enable Google when configured, so local/CI runs without OAuth secrets
 const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+const DUMMY_HASH = "$2b$10$E8gu9h1g2PhgJpgBLSPRYOGW1q7Xl3Cq.VMwDkH1KbCCJTRjnfkZ."
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -24,13 +24,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const username = (credentials?.username as string)?.toLowerCase().trim()
         const password = credentials?.password as string
         if (!username || !password) return null
-        const rl = await limit("login", `u:${username}`)
-        if (!rl.ok) return null
         // username stored in the `email` column (legacy field reused as unique id)
         const user = await prisma.user.findUnique({ where: { email: username } })
-        if (!user?.password) return null
-        const ok = await bcrypt.compare(password, user.password)
-        if (!ok) return null
+        const ok = await bcrypt.compare(password, user?.password ?? DUMMY_HASH)
+        if (!ok || !user?.password) return null
         return { id: user.id, name: user.name, email: user.email }
       },
     }),
@@ -43,6 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 7,
   },
   callbacks: {
     async session({ session, token }) {
