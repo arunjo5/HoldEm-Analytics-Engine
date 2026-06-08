@@ -152,7 +152,7 @@ export function HistoryDrawer({
             </div>
             {user && (
               <div className="drawer-sub" style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}>
-                Showing your latest 250 hands (favorites kept first)
+                Showing your latest 500 hands (favorites kept first)
               </div>
             )}
           </div>

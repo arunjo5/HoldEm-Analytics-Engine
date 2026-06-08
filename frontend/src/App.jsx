@@ -252,7 +252,7 @@ export default function App() {
           odds: {},
           isReplay: true,
           replay: hand,
-          favorite: true,
+          favorite: false,
         }),
       });
       if (r.ok && showHistory) refreshHistory();
@@ -269,6 +269,7 @@ export default function App() {
   // save each imported hand as a favorited replay, then open history
   async function onImportConfirm(chosen) {
     setUploadOpen(false);
+    setImportToast(`Importing ${chosen.length} hand${chosen.length === 1 ? '' : 's'}…`);
     let saved = 0;
     for (const h of chosen) {
       const seats = (h.replay && h.replay.setup && h.replay.setup.seats) || [];
@@ -287,7 +288,7 @@ export default function App() {
             odds: {},
             isReplay: true,
             replay: h.replay,
-            favorite: true,
+            favorite: false,
           }),
         });
         if (r.ok) saved++;
@@ -673,7 +674,10 @@ export default function App() {
             Upload log
           </button>
           {user && (
-            <button className="btn btn-primary" onClick={saveHand} disabled={saving}>
+            <button className="btn btn-ghost" onClick={saveHand} disabled={saving}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
               {saving ? 'Saving…' : 'Favorite'}
             </button>
           )}

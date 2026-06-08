@@ -2542,6 +2542,84 @@ body {
 .upload-hands-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 4px; }
 .light .upload-hands-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); }
 
+/* Player roster rows — "which player are you?" */
+.upload-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  font: inherit;
+  padding: 11px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.upload-player-row:last-child { border-bottom: none; }
+.upload-player-row:hover { background: rgba(255,255,255,0.03); }
+.light .upload-player-row:hover { background: rgba(0,0,0,0.03); }
+.upload-player-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-player-you {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.upload-player-count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.upload-player-go {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+.upload-player-row:hover .upload-player-go { color: var(--gold); transform: translateX(2px); }
+.upload-player-all .upload-player-name svg { flex-shrink: 0; color: var(--text-dim); }
+.upload-player-all:hover .upload-player-name svg { color: var(--gold); }
+
+/* Bulk select-all / clear links in the section label */
+.upload-bulk { display: flex; gap: 12px; align-items: baseline; }
+.upload-bulk .reset-link {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+}
+.upload-bulk .reset-link:hover { color: var(--gold); }
+
 /* Zero-parseable-hands empty state */
 .upload-empty {
   display: flex;

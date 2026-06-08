@@ -1,16 +1,19 @@
-// "Upload PokerNow Log" modal. onConfirm(selectedHands) fires on Import.
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// "Upload PokerNow Log" modal. Flow: drop file -> pick which player you are ->
+// choose from the hands you were dealt into. onConfirm(selectedHands) fires on Import.
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CardChip } from './Cards.jsx';
-import { parsePokerNowLog } from './pokernowImport.js';
+import { parsePokerNowLog, convertHandsFor, convertAllHands } from './pokernowImport.js';
 
-const MAX_HANDS = 25;
+const MAX_HANDS = 50;
 const MAX_BYTES = 10 * 1024 * 1024; // generous — real logs are well under 1 MB
+const ALL_PLAYERS = '__all__'; // heroId sentinel: import without filtering to one player
 
 function UploadModal({ open, onClose, onConfirm }) {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState(null);
   const [fileError, setFileError] = useState(null);
-  const [parsed, setParsed] = useState(null);        // { heroId, hands }
+  const [parsed, setParsed] = useState(null);        // { exportHeroId, players, rawHands }
+  const [heroId, setHeroId] = useState(null);        // the player the user picked
   const [selected, setSelected] = useState([]);      // hand numbers, in order
   const [entryError, setEntryError] = useState(null);
   const [inputValue, setInputValue] = useState('');
@@ -23,19 +26,42 @@ function UploadModal({ open, onClose, onConfirm }) {
     setFileName(null);
     setFileError(null);
     setParsed(null);
+    setHeroId(null);
     setSelected([]);
     setEntryError(null);
     setInputValue('');
   }, [open]);
 
-  const hands = parsed?.hands || [];
-  const phase = !parsed ? 'drop' : hands.length === 0 ? 'empty' : 'parsed';
+  const players = parsed?.players || [];
+  const hands = useMemo(() => {
+    if (!parsed || heroId == null) return [];
+    return heroId === ALL_PLAYERS
+      ? convertAllHands(parsed.rawHands, parsed.exportHeroId)
+      : convertHandsFor(parsed.rawHands, heroId);
+  }, [parsed, heroId]);
+  const totalHands = useMemo(
+    () => (parsed
+      ? parsed.rawHands.filter((h) => (!h.gameType || h.gameType === 'th') && Array.isArray(h.players) && h.players.length >= 2).length
+      : 0),
+    [parsed]
+  );
+  const isAll = heroId === ALL_PLAYERS;
+  const heroPlayer = players.find((p) => p.id === heroId) || null;
+  const heroLabel = isAll ? 'All players' : heroPlayer?.name;
+  const phase = !parsed
+    ? 'drop'
+    : players.length === 0
+      ? 'empty'
+      : heroId == null
+        ? 'player'
+        : 'parsed';
   const minNum = hands.length ? Math.min(...hands.map((h) => h.number)) : 0;
   const maxNum = hands.length ? Math.max(...hands.map((h) => h.number)) : 0;
   const atCap = selected.length >= MAX_HANDS;
 
   const handleFile = useCallback((file) => {
     if (!file) return;
+    setHeroId(null);
     setSelected([]);
     setEntryError(null);
     const name = file.name || 'log';
@@ -69,7 +95,7 @@ function UploadModal({ open, onClose, onConfirm }) {
         );
         return;
       }
-      if (!result || !Array.isArray(result.hands)) {
+      if (!result || !Array.isArray(result.rawHands)) {
         setParsed(null);
         setFileName(name);
         setFileError("This doesn't look like a PokerNow log. Export the hand log from PokerNow and try again.");
@@ -93,6 +119,20 @@ function UploadModal({ open, onClose, onConfirm }) {
     handleFile(e.dataTransfer?.files?.[0]);
   }
 
+  function pickPlayer(id) {
+    setHeroId(id);
+    setSelected([]);
+    setEntryError(null);
+    setInputValue('');
+  }
+
+  function backToPlayers() {
+    setHeroId(null);
+    setSelected([]);
+    setEntryError(null);
+    setInputValue('');
+  }
+
   function processInput(raw) {
     const tokens = String(raw).split(/[^0-9]+/).filter(Boolean).map(Number);
     if (tokens.length === 0) {
@@ -111,7 +151,7 @@ function UploadModal({ open, onClose, onConfirm }) {
     setSelected(working);
     setInputValue('');
     if (notFound.length) {
-      setEntryError(`Hand${notFound.length > 1 ? 's' : ''} ${notFound.map((x) => '#' + x).join(', ')} not found in this file.`);
+      setEntryError(`Hand${notFound.length > 1 ? 's' : ''} ${notFound.map((x) => '#' + x).join(', ')} not in ${isAll ? 'this log' : `${heroPlayer?.name || 'this player'}'s hands`}.`);
     } else if (capHit) {
       setEntryError(`You can add up to ${MAX_HANDS} hands.`);
     } else {
@@ -146,6 +186,21 @@ function UploadModal({ open, onClose, onConfirm }) {
     });
   }
 
+  function selectAll() {
+    setEntryError(null);
+    // most recent first, capped, then shown low-to-high
+    const nums = hands.map((h) => h.number).sort((a, b) => b - a).slice(0, MAX_HANDS).sort((a, b) => a - b);
+    setSelected(nums);
+    if (hands.length > MAX_HANDS) {
+      setEntryError(`Added the ${MAX_HANDS} most recent of ${hands.length} hands (max ${MAX_HANDS}).`);
+    }
+  }
+
+  function clearSelected() {
+    setSelected([]);
+    setEntryError(null);
+  }
+
   function confirm() {
     if (!selected.length) return;
     const byNum = new Map(hands.map((h) => [h.number, h]));
@@ -154,6 +209,7 @@ function UploadModal({ open, onClose, onConfirm }) {
 
   function reset() {
     setParsed(null);
+    setHeroId(null);
     setFileName(null);
     setFileError(null);
     setSelected([]);
@@ -170,8 +226,8 @@ function UploadModal({ open, onClose, onConfirm }) {
           <div>
             <div className="auth-title">Upload PokerNow Log</div>
             <div className="auth-sub">
-              Drop a PokerNow hand-log export and pick the hands you played —
-              they'll be added to your history.
+              Drop a PokerNow export, choose which player you are, then pick the
+              hands to add to your history.
             </div>
           </div>
           <button className="modal-x" onClick={onClose} aria-label="Close">×</button>
@@ -221,6 +277,64 @@ function UploadModal({ open, onClose, onConfirm }) {
             </>
           )}
 
+          {phase === 'player' && (
+            <>
+              <div className="upload-found">
+                <span className="check">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </span>
+                <span><b>{players.length}</b> player{players.length === 1 ? '' : 's'} in this log</span>
+                <button className="reset-link" onClick={reset} style={{ marginLeft: 'auto' }}>Different file</button>
+              </div>
+
+              <div className="upload-hands" style={{ marginBottom: 2 }}>
+                <div className="upload-hands-scroll">
+                  <button className="upload-player-row upload-player-all" onClick={() => pickPlayer(ALL_PLAYERS)}>
+                    <span className="upload-player-name">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                      </svg>
+                      All hands
+                    </span>
+                    <span className="upload-player-count">{totalHands} hand{totalHands === 1 ? '' : 's'}</span>
+                    <span className="upload-player-go" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="upload-label">
+                <span>Or pick a player</span>
+                <span className="count">just their hands</span>
+              </div>
+              <div className="upload-hands">
+                <div className="upload-hands-scroll">
+                  {players.map((p) => (
+                    <PlayerRow
+                      key={p.id}
+                      player={p}
+                      isYou={p.id === parsed.exportHeroId}
+                      onPick={() => pickPlayer(p.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="upload-foot">
+                <span className="upload-foot-info">Pick yourself for just your hands, or add from the whole log</span>
+                <div className="upload-foot-actions">
+                  <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+                </div>
+              </div>
+            </>
+          )}
+
           {phase === 'parsed' && (
             <>
               <div className="upload-found">
@@ -229,13 +343,13 @@ function UploadModal({ open, onClose, onConfirm }) {
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 </span>
-                <span>Found <b>{hands.length}</b> hand{hands.length === 1 ? '' : 's'}</span>
-                <span className="range">#{minNum}–#{maxNum}</span>
-                <button className="reset-link" onClick={reset}>Different file</button>
+                <span><b>{heroLabel}</b> · {hands.length} hand{hands.length === 1 ? '' : 's'}</span>
+                {hands.length > 0 && <span className="range">#{minNum}–#{maxNum}</span>}
+                <button className="reset-link" onClick={backToPlayers}>Change</button>
               </div>
 
               <div className="upload-label">
-                <span>Hands you played</span>
+                <span>Hands to import</span>
                 <span className={'count' + (atCap ? ' at-cap' : '')}>{selected.length} / {MAX_HANDS}</span>
               </div>
 
@@ -278,8 +392,11 @@ function UploadModal({ open, onClose, onConfirm }) {
               )}
 
               <div className="upload-label" style={{ marginTop: 2 }}>
-                <span>All hands in this file</span>
-                <span className="count">tap to add</span>
+                <span>{isAll ? 'All hands in this log' : `All of ${heroPlayer?.name}'s hands`}</span>
+                <span className="upload-bulk">
+                  <button className="reset-link" onClick={selectAll}>Select all</button>
+                  {selected.length > 0 && <button className="reset-link" onClick={clearSelected}>Clear</button>}
+                </span>
               </div>
               <div className="upload-hands">
                 <div className="upload-hands-scroll">
@@ -346,6 +463,23 @@ function DropZone({ isDragging, hasError, fileInputRef, onPick, setIsDragging, o
         onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = ''; }}
       />
     </div>
+  );
+}
+
+function PlayerRow({ player, isYou, onPick }) {
+  return (
+    <button className="upload-player-row" onClick={onPick}>
+      <span className="upload-player-name">
+        {player.name}
+        {isYou && <span className="upload-player-you">you</span>}
+      </span>
+      <span className="upload-player-count">{player.count} hand{player.count === 1 ? '' : 's'}</span>
+      <span className="upload-player-go" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </span>
+    </button>
   );
 }
 

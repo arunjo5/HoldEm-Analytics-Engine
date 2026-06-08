@@ -5,7 +5,7 @@ import { readJsonBody, cleanName } from '@/lib/body'
 import { limit } from '@/lib/rateLimit'
 
 // Per-user row cap. Over this, non-favorites get pruned before favorites.
-const SAVE_CAP = 250
+const SAVE_CAP = 500
 const MAX_BODY = 100 * 1024 // legit saves are a few KB
 const MAX_NAME = 200
 

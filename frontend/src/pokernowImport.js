@@ -215,6 +215,64 @@ function convertHand(h, heroId) {
   };
 }
 
+// Distinct players + how many hands each was dealt into; names can change, so keep the most-used.
+function rosterFromHands(rawHands) {
+  const byId = new Map();
+  for (const h of rawHands) {
+    if (h.gameType && h.gameType !== 'th') continue;
+    const ps = Array.isArray(h.players) ? h.players : [];
+    if (ps.length < 2) continue;
+    const seen = new Set();
+    for (const p of ps) {
+      if (!p || p.id == null || seen.has(p.id)) continue;
+      seen.add(p.id);
+      let rec = byId.get(p.id);
+      if (!rec) { rec = { id: p.id, count: 0, names: new Map() }; byId.set(p.id, rec); }
+      rec.count++;
+      const nm = (p.name || '').trim();
+      if (nm) rec.names.set(nm, (rec.names.get(nm) || 0) + 1);
+    }
+  }
+  const roster = [];
+  for (const rec of byId.values()) {
+    let name = '', best = -1;
+    for (const [nm, c] of rec.names) if (c > best) { best = c; name = nm; }
+    roster.push({ id: rec.id, name: name || 'Unknown', count: rec.count });
+  }
+  roster.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return roster;
+}
+
+// Hands the given player was dealt into, pivoted around them.
+export function convertHandsFor(rawHands, heroId) {
+  const out = [];
+  for (const h of rawHands || []) {
+    if (!Array.isArray(h.players) || !h.players.some((p) => p && p.id === heroId)) continue;
+    try {
+      const conv = convertHand(h, heroId);
+      if (conv) out.push(conv);
+    } catch {
+      // skip an unparseable hand, keep the rest
+    }
+  }
+  return out;
+}
+
+// Every convertible hand, pivoted around the exporter — for importing without a player filter.
+export function convertAllHands(rawHands, pivotId) {
+  const out = [];
+  for (const h of rawHands || []) {
+    try {
+      const conv = convertHand(h, pivotId);
+      if (conv) out.push(conv);
+    } catch {
+      // skip an unparseable hand, keep the rest
+    }
+  }
+  return out;
+}
+
+// Parse + validate the export and pull the player roster.
 export function parsePokerNowLog(jsonText) {
   let data;
   try {
@@ -225,15 +283,9 @@ export function parsePokerNowLog(jsonText) {
   if (!data || typeof data !== 'object' || !Array.isArray(data.hands)) {
     throw new Error('NOT_POKERNOW');
   }
-  const heroId = data.playerId || null;
-  const hands = [];
-  for (const h of data.hands) {
-    try {
-      const conv = convertHand(h, heroId);
-      if (conv) hands.push(conv);
-    } catch {
-      // skip an unparseable hand, keep the rest
-    }
-  }
-  return { heroId, hands };
+  return {
+    exportHeroId: data.playerId || null,
+    players: rosterFromHands(data.hands),
+    rawHands: data.hands,
+  };
 }
