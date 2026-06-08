@@ -42,6 +42,7 @@ export async function PATCH(
     const data: any = {}
     if (typeof body.favorite === 'boolean') data.favorite = body.favorite
     if (typeof body.name === 'string' && body.name.length <= MAX_NAME) data.name = cleanName(body.name)
+    if (body.touch === true) data.lastAccessedAt = new Date()
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
