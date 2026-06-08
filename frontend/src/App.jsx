@@ -194,7 +194,19 @@ export default function App() {
     }
   }
 
+  function touchHistoryItem(id) {
+    // LRU: mark this hand as recently used so it survives the cap
+    if (!user || !id) return;
+    fetch(`/api/searches/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ touch: true }),
+    }).catch(() => {});
+  }
+
   function loadHistoryItem(item) {
+    touchHistoryItem(item.id);
     // Replays reopen in the replayer instead of loading into the calculator.
     if (item.isReplay && item.replay) {
       commitToHistory();

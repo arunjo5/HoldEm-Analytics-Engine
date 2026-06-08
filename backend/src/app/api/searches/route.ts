@@ -83,10 +83,11 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Prune past the cap, favorites last, oldest first.
+    // Prune past the cap (LRU): favorites kept first, then most-recently-used;
+    // whatever falls past the cap is the least-recently-used non-favorite.
     const stale = await prisma.search.findMany({
       where: { userId },
-      orderBy: [{ favorite: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ favorite: 'desc' }, { lastAccessedAt: 'desc' }, { createdAt: 'desc' }],
       skip: SAVE_CAP,
       select: { id: true },
     })
