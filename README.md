@@ -1,10 +1,45 @@
 ## PokerLab
 
-[![CI](https://github.com/arunjo5/PokerLab/actions/workflows/ci.yml/badge.svg)](https://github.com/arunjo5/PokerLab/actions/workflows/ci.yml)
-
 #### Texas Hold'Em analytics platform for hand/range equity, pot odds/MDF, and hand-history replay.
 
-<img width="1200" alt="Screenshot 2026-05-30 at 2 03 04 AM" src="https://github.com/user-attachments/assets/5505da9a-f9bb-40d4-b4f2-aaff6499af41" />
+<img width="1200" alt="PokerLab equity calculator" src="pokerlab.png" />
+
+PokerLab lets you deal hole cards, assign ranges, and set the board, then computes each player’s equity using a Monte Carlo simulation. It also includes a side panel for calculating pot odds and MDF in the current spot. You can import PokerNow logs into the replayer, share exact board states or replays, and review past hands from your profile page.
+
+## Architecture
+
+```text
++----------------------------------------------------------+
+|                     Users / Browsers                     |
+|                                                          |
+|                       pokerlab.dev                       |
++----------------------------------------------------------+
+                             |
+                           HTTPS
+                             |
++----------------------------------------------------------+
+|              Frontend  ·  Vite + React SPA               |
+|                                                          |
+|     Equity Calculator · Hand Replayer · Share links      |
+|      Equity Web Worker · Monte Carlo (client-side)       |
++----------------------------------------------------------+
+                             |
+                /api/*  ·  same-origin proxy
+                             |
++----------------------------------------------------------+
+|                 Backend  ·  Next.js API                  |
+|                                                          |
+|         NextAuth v5 · Credentials + Google · JWT         |
+|      /api/searches · saved-hand CRUD · rate-limited      |
++----------------------------------------------------------+
+                             |
+                             |
++----------------------------------------------------------+
+|                     Data & Services                      |
+|                                                          |
+|  Neon Postgres (Prisma) · Upstash Redis · Google OAuth   |
++----------------------------------------------------------+
+```
 
 ## Quick start guide
 

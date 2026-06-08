@@ -1,118 +1,75 @@
-# Hold'Em Analytics Engine — Setup Guide
+# PokerLab — Setup Guide
 
 ## Prerequisites
 
-- Node.js 18+ installed
-- PostgreSQL database
-- Google Cloud Console account
+- Node.js 18+
+- A PostgreSQL database (e.g. Neon)
+- A Google Cloud project — only if you want Google sign-in
 
-## Step-by-Step Setup
-
-### 1. Install Dependencies
+## 1. Install
 
 ```bash
 npm install
 ```
 
-### 2. Set Up Environment Variables
+## 2. Environment variables
 
-Create a `.env.local` file in the root directory:
+Create `.env.local`:
 
 ```env
 # Database
-DATABASE_URL="postgresql://username:password@localhost:5432/holdem_odds_db"
+DATABASE_URL="postgresql://user:password@localhost:5432/pokerlab"
 
-# NextAuth
-NEXTAUTH_SECRET="your-secret-key-here"
-NEXTAUTH_URL="http://localhost:3000"
+# Auth.js (NextAuth v5)
+AUTH_SECRET="your-secret"          # openssl rand -base64 32
+AUTH_URL="http://localhost:3000"   # your domain in production
 
-# Google OAuth
+# Google sign-in (optional — omit both to run username/password only)
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 ```
 
-**Important Notes:**
-- Replace `username`, `password`, and `holdem_odds_db` with your actual PostgreSQL credentials
-- Generate a random string for `NEXTAUTH_SECRET` (you can use `openssl rand -base64 32`)
-- Set `NEXTAUTH_URL` to your actual domain in production
+Notes:
+- Username/password sign-in works with no Google config.
+- Locally `AUTH_URL` can be omitted (the app trusts the host); set it to your real domain in production.
 
-### 3. Google OAuth Setup
+## 3. Google OAuth (optional)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google+ API
-4. Go to **APIs & Services** → **Credentials**
-5. Click **Create Credentials** → **OAuth 2.0 Client IDs**
-6. Set **Application type** to "Web application"
-7. Add **Authorized redirect URIs**:
-   - `http://localhost:3000/api/auth/callback/google` (for development)
-   - `https://yourdomain.com/api/auth/callback/google` (for production)
-8. Copy the **Client ID** and **Client Secret** to your `.env.local` file
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID**, type **Web application**.
+3. Add authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (dev)
+   - `https://yourdomain.com/api/auth/callback/google` (prod)
+4. Copy the Client ID and Secret into `.env.local`.
 
-### 4. Database Setup
-
-1. Install PostgreSQL on your system
-2. Create a new database:
-   ```sql
-   CREATE DATABASE holdem_odds_db;
-   ```
-3. Update the `DATABASE_URL` in your `.env.local` file with your actual credentials
-4. Run the database migrations:
-   ```bash
-   npx prisma migrate dev --name init
-   ```
-
-### 5. Generate Prisma Client
+## 4. Database
 
 ```bash
-npx prisma generate
+npx prisma migrate dev    # apply the schema (prisma generate runs on install)
 ```
 
-### 6. Start Development Server
+## 5. Run
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Testing the Authentication
-
-1. You should see a "Sign in with Google" button in the top-right corner
-2. Click it to test the Google OAuth flow
-3. After signing in, you should see your user avatar and name
-4. The search management sidebar should now be accessible
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Troubleshooting
 
-### Common Issues
+- **Invalid redirect URI**: the Google redirect URI must match exactly.
+- **Database connection error**: check `DATABASE_URL` and that the database exists.
+- **Prisma client not initialized**: run `npx prisma generate`.
 
-1. **"Invalid redirect URI" error**: Make sure your Google OAuth redirect URI matches exactly
-2. **Database connection error**: Verify your PostgreSQL credentials and that the database exists
-3. **"Prisma client not initialized"**: Run `npx prisma generate` after setting up the database
-4. **Build errors**: Make sure all environment variables are set correctly
+## Production
 
-### Environment Variable Checklist
+- Use a managed PostgreSQL (Neon) with production env values.
+- Set `AUTH_URL` to your production domain and use a strong, unique `AUTH_SECRET`.
+- Add the production domain to the Google OAuth redirect URIs.
 
-- [ ] `DATABASE_URL` - PostgreSQL connection string
-- [ ] `NEXTAUTH_SECRET` - Random secret string
-- [ ] `NEXTAUTH_URL` - Your application URL
-- [ ] `GOOGLE_CLIENT_ID` - From Google Cloud Console
-- [ ] `GOOGLE_CLIENT_SECRET` - From Google Cloud Console
+## Security
 
-## Production Deployment
-
-1. Set up a production PostgreSQL database
-2. Update environment variables with production values
-3. Set `NEXTAUTH_URL` to your production domain
-4. Update Google OAuth redirect URIs to include your production domain
-5. Use a strong, unique `NEXTAUTH_SECRET`
-6. Consider using environment variable management services (Vercel, Netlify, etc.)
-
-## Security Notes
-
-- Never commit `.env.local` to version control
-- Use strong, unique secrets for production
-- Regularly rotate your OAuth credentials
-- Monitor your application logs for suspicious activity
-- Consider implementing rate limiting for API endpoints
+- Never commit `.env.local`.
+- Use strong secrets in production and rotate OAuth credentials periodically.
+- API routes are rate-limited (Upstash Redis, with an in-memory fallback).

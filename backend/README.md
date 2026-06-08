@@ -1,127 +1,76 @@
-# Hold'Em Analytics Engine — Backend
+# PokerLab — Backend
 
-Auth + persistence service for the Hold'Em Analytics Engine. Google Sign-In and saved search history.
+Auth and persistence for PokerLab. Equity is computed client-side in the frontend; this service handles accounts, the saved-hand API, and rate limiting.
 
-## Features
+## Stack
 
-- **Poker Odds Calculation**: Calculate winning probabilities for Texas Hold'em hands
-- **Google Authentication**: Sign in with your Google account
-- **Search History**: Save and replay your previous calculations
-- **Responsive Design**: Works on desktop and mobile devices
-- **Dark/Light Mode**: Toggle between color schemes
+- Next.js 14 (App Router) + TypeScript
+- Auth.js (NextAuth v5): username/password (bcrypt) + optional Google, JWT sessions
+- Prisma + PostgreSQL (Neon)
+- Upstash Redis for rate limiting (in-memory fallback when unset)
 
-## Setup Instructions
-
-### 1. Install Dependencies
+## Setup
 
 ```bash
 npm install
 ```
 
-### 2. Environment Configuration
-
-Create a `.env.local` file in the root directory with the following variables:
+Create `.env.local`:
 
 ```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/holdem_odds_db"
+DATABASE_URL="postgresql://user:password@localhost:5432/pokerlab"
+AUTH_SECRET="generate with: openssl rand -base64 32"
+AUTH_URL="http://localhost:3000"
 
-# NextAuth
-NEXTAUTH_SECRET="your-secret-key-here"
-NEXTAUTH_URL="http://localhost:3000"
-
-# Google OAuth
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
+# Google sign-in (optional — omit both to run username/password only)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
 ```
 
-### 3. Google OAuth Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google+ API
-4. Go to Credentials → Create Credentials → OAuth 2.0 Client IDs
-5. Set the authorized redirect URI to: `http://localhost:3000/api/auth/callback/google`
-6. Copy the Client ID and Client Secret to your `.env.local` file
-
-### 4. Database Setup
-
-1. Install PostgreSQL on your system
-2. Create a new database: `holdem_odds_db`
-3. Update the `DATABASE_URL` in your `.env.local` file
-4. Run the database migrations:
+Then:
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma migrate dev    # create the schema
+npm run dev               # http://localhost:3000
 ```
 
-### 5. Generate Prisma Client
+See [setup.md](./setup.md) for the full auth/DB walkthrough (Google OAuth, Neon, production).
 
-```bash
-npx prisma generate
-```
+## Scripts
 
-### 6. Run the Development Server
+- `npm run dev` / `npm run build` / `npm run start`
+- `npm run lint` — next lint
+- `npm run test` — Vitest
 
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Usage
-
-1. **Sign In**: Click "Sign in with Google" to authenticate
-2. **Set Up Game**: Use the table interface to set player hands and community cards
-3. **Calculate Odds**: View real-time probability calculations
-4. **Save Searches**: Click "Save Current Search" to store your calculations
-5. **View History**: Access your saved searches in the right sidebar
-6. **Replay Searches**: Click the replay button on any saved search to restore the game state
-
-## Project Structure
+## Structure
 
 ```
 src/
-├── app/                    # Next.js app directory
-│   ├── api/               # API routes
-│   │   └── auth/          # NextAuth configuration
-│   │   └── searches/      # Search management API
-│   ├── globals.css        # Global styles
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Main page
-│   ├── providers.tsx      # Context providers
-│   └── theme.ts           # Chakra UI theme
-├── components/             # React components
-│   ├── auth/              # Authentication components
-│   ├── search/            # Search management components
-│   ├── CardSelector.tsx   # Card selection interface
-│   ├── Header.tsx         # App header with auth
-│   ├── OddsDisplay.tsx    # Odds display
-│   ├── PlayingCard.tsx    # Individual card component
-│   ├── Table.tsx          # Poker table interface
-│   └── ColorModeToggle.tsx # Theme toggle
-├── contexts/               # React contexts
-│   └── AuthContext.tsx    # Authentication context
-├── lib/                    # Utility libraries
-│   ├── odds.ts            # Odds calculation logic
-│   └── prisma.ts          # Database client
-└── types/                  # TypeScript type definitions
-    └── next-auth.d.ts     # NextAuth type extensions
+├── auth.ts                       Auth.js config (Credentials + Google, JWT)
+├── app/
+│   ├── api/auth/[...nextauth]/   NextAuth handlers
+│   ├── api/auth/signup/          username/password signup
+│   ├── api/searches/             saved-hand list + create
+│   ├── api/searches/[id]/        favorite or delete one
+│   ├── layout.tsx · page.tsx · providers.tsx · theme.ts
+│   └── globals.css
+├── components/                   Header, auth (SignInButton, UserMenu), ColorModeToggle
+├── contexts/AuthContext.tsx
+├── lib/
+│   ├── prisma.ts                 Prisma client
+│   ├── rateLimit.ts              Upstash + in-memory limiter
+│   └── body.ts                   JSON body parsing + input sanitizing
+└── types/next-auth.d.ts
 ```
 
-## API Endpoints
+## API
 
-- `POST /api/searches` - Create a new search
-- `GET /api/searches` - Get user's search history
-- `DELETE /api/searches/[id]` - Delete a specific search
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+- `POST /api/auth/signup` — create a username/password account
+- `GET /api/searches` — list saved hands
+- `POST /api/searches` — save a hand
+- `PATCH /api/searches/[id]` — toggle favorite
+- `DELETE /api/searches/[id]` — delete a hand
 
 ## License
 
-MIT License
+MIT
