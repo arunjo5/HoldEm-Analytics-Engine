@@ -8,6 +8,7 @@ import { HistoryDrawer } from './HistoryDrawer.jsx';
 import { ShareModal } from './ShareModal.jsx';
 import { UploadModal } from './UploadModal.jsx';
 import { ReplayerView, readReplayFromUrl } from './Replayer.jsx';
+import { SolverView } from './SolverView.jsx';
 import {
   encodeScenario,
   decodeScenario,
@@ -198,7 +199,7 @@ export default function App() {
     // Replays reopen in the replayer instead of loading into the calculator.
     if (item.isReplay && item.replay) {
       commitToHistory();
-      setReplayHand({ ...item.replay, savedId: item.id });
+      setReplayHand({ ...item.replay, savedId: item.id, favorited: !!item.starred });
       setView('replayer');
       setShowHistory(false);
       return;
@@ -235,7 +236,7 @@ export default function App() {
   // Persist a replay to history (DB-backed, like a normal saved hand but with
   // isReplay + the full replay payload). hand = { setup, actions, board }.
   async function saveReplayToHistory(hand, summary) {
-    if (!user) { signIn(); return; }
+    if (!user) { signIn(); return null; }
     const seats = (hand.setup && hand.setup.seats) || [];
     const playersForRow = seats.map(s =>
       s.cards && s.cards.length === 2 ? { kind: 'hand', hand: s.cards } : null
@@ -252,13 +253,18 @@ export default function App() {
           odds: {},
           isReplay: true,
           replay: hand,
-          favorite: false,
+          favorite: true,
         }),
       });
-      if (r.ok && showHistory) refreshHistory();
+      if (r.ok) {
+        const data = await r.json().catch(() => null);
+        if (showHistory) refreshHistory();
+        return data && data.search ? data.search.id : null;
+      }
     } catch {
-      /* swallow — replayer shows its own optimistic "Saved" toast */
+      /* swallow — replayer shows its own optimistic toast */
     }
+    return null;
   }
 
   function openUpload() {
@@ -603,7 +609,7 @@ export default function App() {
   // Profile menu + history drawer — shared between the calculator and the replayer
   // so a user can open another hand from history without leaving the replayer.
   const userMenuEl = user ? (
-    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} />
+    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} onOpenShare={openShare} />
   ) : (
     <button className="btn btn-signin" onClick={signIn}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -634,8 +640,20 @@ export default function App() {
         initialHand={replayHand}
         onExit={() => setView('calc')}
         onSaveToHistory={saveReplayToHistory}
+        onSetFavorite={toggleFavorite}
         userMenu={userMenuEl}
         historyDrawer={historyDrawerEl}
+      />
+    );
+  }
+
+  // The solver is its own full-screen mode.
+  if (view === 'solver') {
+    return (
+      <SolverView
+        onExit={() => setView('calc')}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
       />
     );
   }
@@ -659,12 +677,11 @@ export default function App() {
             </svg>
             Replayer
           </button>
-          <button className="btn btn-ghost btn-share" onClick={openShare} title="Share scenario via link">
+          <button className="btn btn-ghost btn-solver" onClick={() => setView('solver')} title="Heads-up river GTO solver">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+              <path d="M3 3v18h18" /><path d="M7 14l3-4 3 2 4-6" />
             </svg>
-            Share
+            Solver
           </button>
           <button className="btn btn-ghost btn-upload" onClick={openUpload} title="Import hands from a PokerNow log">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -849,7 +866,7 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
 }
 
 // ─── UserChip — avatar dropdown in the topbar ───
-function UserChip({ user, onSignOut, onOpenHistory }) {
+function UserChip({ user, onSignOut, onOpenHistory, onOpenShare }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -880,6 +897,13 @@ function UserChip({ user, onSignOut, onOpenHistory }) {
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
             </svg>
             Hand history
+          </button>
+          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenShare(); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+            </svg>
+            Share
           </button>
           <button className="user-menu-item danger" onClick={() => { setOpen(false); onSignOut(); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
