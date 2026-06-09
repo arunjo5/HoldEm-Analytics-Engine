@@ -710,10 +710,11 @@ function makeSeats(n, bb) {
 }
 
 // Top-level: builder → playback.
-export function ReplayerView({ initialHand, onExit, onSaveToHistory, userMenu, historyDrawer }) {
+export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavorite, userMenu, historyDrawer }) {
   const [hand, setHand] = useState(initialHand || null); // { setup, actions, board }
   const [idx, setIdx] = useState(0);
-  const [saved, setSaved] = useState(!!(initialHand && initialHand.savedId));
+  const [savedId, setSavedId] = useState((initialHand && initialHand.savedId) || null);
+  const [favorited, setFavorited] = useState(!!(initialHand && initialHand.favorited));
   const [toast, setToast] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
@@ -784,20 +785,32 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, userMenu, h
 
   // Load a different hand chosen from history while the replayer is already open.
   useEffect(() => {
-    if (initialHand) { setHand(initialHand); setSaved(!!initialHand.savedId); }
+    if (initialHand) { setHand(initialHand); setSavedId(initialHand.savedId || null); setFavorited(!!initialHand.favorited); }
   }, [initialHand]);
 
   function handleComplete(setup, actions, board) {
     setHand({ setup, actions, board });
-    setSaved(false);
+    setSavedId(null);
+    setFavorited(false);
   }
 
-  function saveToHistory() {
+  async function toggleFavorite() {
     if (!hand) return;
-    const summary = buildReplaySummary(hand, frames, equity);
-    onSaveToHistory({ ...hand }, summary);
-    setSaved(true);
-    setToast('Added to favorites');
+    if (favorited) {
+      if (savedId && onSetFavorite) onSetFavorite(savedId, false);
+      setFavorited(false);
+      setToast('Removed from favorites');
+    } else {
+      if (savedId && onSetFavorite) {
+        onSetFavorite(savedId, true);
+      } else {
+        const summary = buildReplaySummary(hand, frames, equity);
+        const id = await onSaveToHistory({ ...hand }, summary);
+        if (id) setSavedId(id);
+      }
+      setFavorited(true);
+      setToast('Added to favorites');
+    }
     setTimeout(() => setToast(null), 2600);
   }
 
@@ -834,8 +847,12 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, userMenu, h
               Share
             </button>
             <button className="btn btn-ghost" onClick={() => { setHand(null); }}>New hand</button>
-            <button className="btn btn-primary" onClick={saveToHistory} disabled={saved}>
-              {saved ? '✓ Favorited' : 'Favorite'}
+            <button
+              className={'btn ' + (favorited ? 'btn-primary' : 'btn-ghost')}
+              onClick={toggleFavorite}
+              title={favorited ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {favorited ? '✓ Favorited' : 'Favorite'}
             </button>
             {userMenu && <span className="topbar-divider" />}
             {userMenu}
@@ -877,12 +894,12 @@ function ReplayerHeader({ onExit, title, right }) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
         Back
       </button>
-      <div className="replayer-titlewrap">
-        <span className="replayer-badge">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4" /></svg>
-        </span>
-        <div className="replayer-title">{title}</div>
-      </div>
+      <span className="sv-header-sep" />
+      <div className="brand-mark"><span className="accent">Poker</span>Lab</div>
+      <span className="sv-mode-badge">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4" /></svg>
+        {title}
+      </span>
       <div className="replayer-header-right">{right}</div>
     </div>
   );
