@@ -24,4 +24,40 @@ describe('calculate() equity', () => {
     const r = calculate([hand('Kh', 'Qh'), hand('Ac', 'As')], board, { sims: 2000 });
     expect(r.perPlayer[0].equity).toBeGreaterThan(99);
   });
+
+  // royal flush on board: every player plays the board, guaranteed chop
+  const royalBoard = [card('As'), card('Ks'), card('Qs'), card('Js'), card('Ts')];
+
+  it('splits a 2-way chop 50/50', () => {
+    const r = calculate([hand('2h', '3h'), hand('4d', '5d')], royalBoard, { sims: 2000 });
+    expect(r.perPlayer[0].equity).toBeCloseTo(50, 5);
+    expect(r.perPlayer[1].equity).toBeCloseTo(50, 5);
+    expect(r.perPlayer[0].tie).toBeCloseTo(100, 5);
+    expect(r.perPlayer[0].equity + r.perPlayer[1].equity).toBeCloseTo(100, 5);
+  });
+
+  it('splits a 3-way chop into thirds summing to 100', () => {
+    const r = calculate([hand('2h', '3h'), hand('4d', '5d'), hand('6c', '7c')], royalBoard, { sims: 2000 });
+    let sum = 0;
+    for (const idx of [0, 1, 2]) {
+      expect(r.perPlayer[idx].equity).toBeCloseTo(100 / 3, 4);
+      expect(r.perPlayer[idx].tie).toBeCloseTo(100, 5);
+      sum += r.perPlayer[idx].equity;
+    }
+    expect(sum).toBeCloseTo(100, 4);
+  });
+
+  it('splits a 4-way chop into quarters summing to 100', () => {
+    const r = calculate(
+      [hand('2h', '3h'), hand('4d', '5d'), hand('6c', '7c'), hand('8h', '9h')],
+      royalBoard,
+      { sims: 2000 }
+    );
+    let sum = 0;
+    for (const idx of [0, 1, 2, 3]) {
+      expect(r.perPlayer[idx].equity).toBeCloseTo(25, 4);
+      sum += r.perPlayer[idx].equity;
+    }
+    expect(sum).toBeCloseTo(100, 4);
+  });
 });
