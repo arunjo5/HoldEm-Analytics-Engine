@@ -17,6 +17,7 @@ self.onmessage = (e) => {
       type: 'batch',
       deltaWins: r.wins,
       deltaTies: r.ties,
+      deltaTieShares: r.tieShares,
       deltaValid: r.valid,
     });
     setTimeout(runNextBatch, 0);

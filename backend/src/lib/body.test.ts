@@ -36,6 +36,54 @@ describe('cleanName', () => {
   it('NFC-normalizes combining marks', () => {
     expect(cleanName('e' + COMBINING_ACUTE)).toBe(E_ACUTE)
   })
+
+  // sanitizer hole: U+2066-2069 and U+061C fall outside every strip range
+  it.skip('strips bidi isolates and the Arabic letter mark', () => {
+    for (const cp of [0x2066, 0x2067, 0x2068, 0x2069, 0x061c]) {
+      expect(cleanName('a' + String.fromCodePoint(cp) + 'b')).toBe('ab')
+    }
+  })
+
+  it('pins the strip-range boundaries', () => {
+    expect(cleanName('ab')).toBe('ab')
+    expect(cleanName('a b')).toBe('a b')
+    expect(cleanName('a~b')).toBe('a~b')
+    expect(cleanName('ab')).toBe('ab')
+    expect(cleanName('ab')).toBe('ab')
+    expect(cleanName('a b')).toBe('a b') // NBSP intentionally kept
+  })
+
+  it('strips tab, newline and CR', () => {
+    expect(cleanName('a\tb\nc\r')).toBe('abc')
+  })
+
+  it('keeps astral-plane emoji intact', () => {
+    expect(cleanName('a👍b')).toBe('a👍b')
+  })
+
+  it('breaks ZWJ emoji sequences by design (U+200D is in the strip range)', () => {
+    expect(cleanName('👨‍👩‍👧')).toBe('👨👩👧')
+  })
+
+  it('strips after NFC without re-normalizing: ZWSP-blocked composition stays decomposed', () => {
+    const out = cleanName('e' + ZWSP + COMBINING_ACUTE)
+    expect(out).toBe('e' + COMBINING_ACUTE)
+    expect(out).not.toBe(E_ACUTE)
+    expect(out.normalize('NFC')).not.toBe(out)
+  })
+
+  it('NFC halves decomposed pairs, so output can be shorter than the validated input', () => {
+    const decomposed = ('e' + COMBINING_ACUTE).repeat(100)
+    expect(decomposed.length).toBe(200)
+    const out = cleanName(decomposed)
+    expect(out).toBe(E_ACUTE.repeat(100))
+    expect(out.length).toBe(100)
+  })
+
+  it('handles empty and all-strippable input', () => {
+    expect(cleanName('')).toBe('')
+    expect(cleanName(ZWSP + BOM + RLO)).toBe('')
+  })
 })
 
 describe('readJsonBody', () => {

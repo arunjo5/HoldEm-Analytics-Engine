@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { encodeReplay, decodeReplay } from './replayShare.js';
+import { packV2 } from './shareCodec.js';
 
 const card = (s) => ({ v: s[0], s: s[1] });
 
@@ -63,5 +64,55 @@ describe('replay encode/decode round-trip', () => {
   it('returns null on malformed input', () => {
     expect(decodeReplay('garbage !!')).toBeNull();
     expect(decodeReplay('')).toBeNull();
+  });
+});
+
+describe('codec edge branches', () => {
+  it('round-trips ante and defaults ante/cents when omitted', () => {
+    const withAnte = { ...HAND, setup: { ...HAND.setup, ante: 3 } };
+    expect(decodeReplay(encodeReplay(withAnte)).setup.ante).toBe(3);
+    const plain = decodeReplay(encodeReplay({ ...HAND, setup: { ...HAND.setup, ante: 0, cents: false } }));
+    expect(plain.setup.ante).toBe(0);
+    expect(plain.setup.cents).toBe(false);
+  });
+
+  it('maps unknown action types to fold on both encode and decode', () => {
+    const weird = { ...HAND, actions: [{ seat: 0, type: 'jam', street: 0 }] };
+    expect(decodeReplay(encodeReplay(weird)).actions[0].type).toBe('fold');
+    const crafted = packV2({ sb: 1, bb: 2, st: [['', 200], ['', 200]], ac: [[0, 9, 0]], bd: [] });
+    expect(decodeReplay(crafted).actions[0].type).toBe('fold');
+  });
+
+  it('keeps amount 0 but drops a missing amount', () => {
+    const h = { ...HAND, actions: [
+      { seat: 0, type: 'bet', amount: 0, street: 1 },
+      { seat: 1, type: 'call', street: 1 },
+    ] };
+    const out = decodeReplay(encodeReplay(h));
+    expect(out.actions[0].amount).toBe(0);
+    expect('amount' in out.actions[0]).toBe(true);
+    expect('amount' in out.actions[1]).toBe(false);
+  });
+
+  it('returns null for a tilde payload that is not lz data', () => {
+    expect(decodeReplay('~not-lz-garbage')).toBeNull();
+  });
+
+  it('rejects v2 payloads with empty or corrupt seat lists', () => {
+    expect(decodeReplay(packV2({ sb: 1, bb: 2, st: [], ac: [], bd: [] }))).toBeNull();
+    expect(decodeReplay(packV2({ sb: 1, bb: 2, st: [null], ac: [], bd: [] }))).toBeNull();
+  });
+
+  it('rejects a v1 object missing the board', () => {
+    const v1 = btoa(JSON.stringify({ s: { seats: [] }, a: [] }));
+    expect(decodeReplay(v1)).toBeNull();
+  });
+
+  it('derives positions for 9-max and heads-up tables', () => {
+    const seats9 = Array.from({ length: 9 }, (_, i) => ({ name: 'p' + i, stack: 100, cards: null }));
+    const out9 = decodeReplay(encodeReplay({ setup: { sb: 1, bb: 2, seats: seats9 }, actions: [], board: [] }));
+    expect(out9.setup.seats.map((s) => s.pos)).toEqual(['BTN', 'SB', 'BB', 'UTG', 'UTG1', 'MP', 'LJ', 'HJ', 'CO']);
+    const out2 = decodeReplay(encodeReplay({ setup: { sb: 1, bb: 2, seats: seats9.slice(0, 2) }, actions: [], board: [] }));
+    expect(out2.setup.seats.map((s) => s.pos)).toEqual(['BTN', 'BB']);
   });
 });

@@ -353,7 +353,7 @@ export default function App() {
       const maxPerWorker = Math.ceil(MAX_SIMS_TOTAL / N);
 
       const workers = [];
-      const aggWins = {}, aggTies = {};
+      const aggWins = {}, aggTies = {}, aggTieShares = {};
       let aggValid = 0;
       let stopped = false;
       let doneCount = 0;
@@ -364,7 +364,7 @@ export default function App() {
           perPlayer[idx] = {
             win: aggValid ? (aggWins[idx] / aggValid) * 100 : 0,
             tie: aggValid ? (aggTies[idx] / aggValid) * 100 : 0,
-            equity: aggValid ? ((aggWins[idx] + aggTies[idx] * 0.5) / aggValid) * 100 : 0,
+            equity: aggValid ? ((aggWins[idx] + aggTieShares[idx]) / aggValid) * 100 : 0,
           };
         }
         return perPlayer;
@@ -381,7 +381,7 @@ export default function App() {
         if (stopped || aggValid < MIN_SIMS_FOR_CHECK) return;
         let maxSE = 0;
         for (const idx of Object.keys(aggWins)) {
-          const p = (aggWins[idx] + 0.5 * aggTies[idx]) / aggValid;
+          const p = (aggWins[idx] + aggTieShares[idx]) / aggValid;
           const se = Math.sqrt(p * (1 - p) / aggValid);
           if (se > maxSE) maxSE = se;
         }
@@ -401,6 +401,7 @@ export default function App() {
             for (const idx of Object.keys(e.data.deltaWins)) {
               aggWins[idx] = (aggWins[idx] || 0) + e.data.deltaWins[idx];
               aggTies[idx] = (aggTies[idx] || 0) + e.data.deltaTies[idx];
+              aggTieShares[idx] = (aggTieShares[idx] || 0) + e.data.deltaTieShares[idx];
             }
             setResults({ perPlayer: buildPerPlayer(), sims: aggValid });
             checkConvergence();

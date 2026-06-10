@@ -186,7 +186,7 @@ export function simulate(players, board, sims) {
     }
   }
   const numActive = active.length;
-  if (numActive === 0) return { wins: {}, ties: {}, valid: 0 };
+  if (numActive === 0) return { wins: {}, ties: {}, tieShares: {}, valid: 0 };
 
   for (let pi = 0; pi < numActive; pi++) PLAYER_IDX[pi] = active[pi].idx;
 
@@ -200,10 +200,12 @@ export function simulate(players, board, sims) {
   }
   const k = 5 - boardLen;
 
-  const wins = {}, ties = {};
+  // ties counts "was in a chop"; tieShares credits 1/N per N-way chop so equity sums to 100
+  const wins = {}, ties = {}, tieShares = {};
   for (let pi = 0; pi < numActive; pi++) {
     wins[active[pi].idx] = 0;
     ties[active[pi].idx] = 0;
+    tieShares[active[pi].idx] = 0;
   }
 
   let valid = 0;
@@ -285,26 +287,30 @@ export function simulate(players, board, sims) {
     if (winnerCount === 1) {
       wins[PLAYER_IDX[singleWinner]]++;
     } else {
+      const share = 1 / winnerCount;
       for (let pi = 0; pi < numActive; pi++) {
-        if (SCORES[pi] === best) ties[PLAYER_IDX[pi]]++;
+        if (SCORES[pi] === best) {
+          ties[PLAYER_IDX[pi]]++;
+          tieShares[PLAYER_IDX[pi]] += share;
+        }
       }
     }
 
     valid++;
   }
 
-  return { wins, ties, valid };
+  return { wins, ties, tieShares, valid };
 }
 
 export function calculate(players, board, opts = {}) {
   const sims = opts.sims || 100000;
-  const { wins, ties, valid } = simulate(players, board, sims);
+  const { wins, ties, tieShares, valid } = simulate(players, board, sims);
   const perPlayer = {};
   for (const idx of Object.keys(wins)) {
     perPlayer[idx] = {
       win: valid ? (wins[idx] / valid) * 100 : 0,
       tie: valid ? (ties[idx] / valid) * 100 : 0,
-      equity: valid ? ((wins[idx] + ties[idx] * 0.5) / valid) * 100 : 0,
+      equity: valid ? ((wins[idx] + tieShares[idx]) / valid) * 100 : 0,
     };
   }
   return { perPlayer, sims: valid };
