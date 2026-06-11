@@ -227,8 +227,7 @@ describe('favorite toggle flow', () => {
     expect(screen.getByText('Removed from favorites')).toBeInTheDocument();
   });
 
-  // bug: favorited only flips after the await, so a second click re-enters the save branch and double-saves
-  it.skip('a second click before the save resolves does not double-save', async () => {
+  it('a second click before the save resolves does not double-save', async () => {
     let resolveSave;
     const onSaveToHistory = vi.fn(() => new Promise(r => { resolveSave = r; }));
     show(HAND, { onSaveToHistory });
@@ -518,8 +517,7 @@ describe('HandBuilder flow', () => {
     expect(document.querySelector('.builder-log')).toBeNull();
   });
 
-  // bug: undo() computes `last` but never steps currentStreet/board back as its comment promises
-  it.skip('undoing the only flop action steps back to preflop', () => {
+  it('undoing the only flop action steps back to preflop', () => {
     show(undefined);
     enterActionPhase(2, PAIRS2);
     fireEvent.click(screen.getByText('Call 1'));

@@ -440,13 +440,15 @@ function HandBuilder({ onComplete, onCancel }) {
     setBetAmt('');
   }
   function undo() {
-    setActions(prev => {
-      if (prev.length === 0) return prev;
-      const last = prev[prev.length - 1];
-      // if removing an action drops us to a prior street, step back the street + board
-      const n = prev.slice(0, -1);
-      return n;
-    });
+    if (actions.length === 0) return;
+    const n = actions.slice(0, -1);
+    // if removing an action drops us to a prior street, step back the street + board
+    const newStreet = n.length ? n[n.length - 1].street : 0;
+    if (newStreet < currentStreet) {
+      setCurrentStreet(newStreet);
+      setBoard(prev => prev.slice(0, newStreet ? newStreet + 2 : 0));
+    }
+    setActions(n);
   }
   function dealNext() {
     const need = currentStreet === 0 ? 3 : 1;
@@ -715,6 +717,7 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
   const [idx, setIdx] = useState(0);
   const [savedId, setSavedId] = useState((initialHand && initialHand.savedId) || null);
   const [favorited, setFavorited] = useState(!!(initialHand && initialHand.favorited));
+  const savingFav = useRef(false);
   const [toast, setToast] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
@@ -795,7 +798,7 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
   }
 
   async function toggleFavorite() {
-    if (!hand) return;
+    if (!hand || savingFav.current) return;
     if (favorited) {
       if (savedId && onSetFavorite) onSetFavorite(savedId, false);
       setFavorited(false);
@@ -804,9 +807,14 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
       if (savedId && onSetFavorite) {
         onSetFavorite(savedId, true);
       } else {
-        const summary = buildReplaySummary(hand, frames, equity);
-        const id = await onSaveToHistory({ ...hand }, summary);
-        if (id) setSavedId(id);
+        savingFav.current = true;
+        try {
+          const summary = buildReplaySummary(hand, frames, equity);
+          const id = await onSaveToHistory({ ...hand }, summary);
+          if (id) setSavedId(id);
+        } finally {
+          savingFav.current = false;
+        }
       }
       setFavorited(true);
       setToast('Added to favorites');

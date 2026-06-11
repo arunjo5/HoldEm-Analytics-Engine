@@ -49,8 +49,8 @@ describe('PokerNow log -> import -> replay engine', () => {
     const frames = ReplayEngine.buildReplay(setup, actions, board);
     const last = frames[frames.length - 1];
     expect(last.handOver).toBe(true);
-    // final pot minus the returned uncalled bet equals what PokerNow paid out
-    expect(last.pot - UNCALLED).toBe(WIN);
+    // the engine returns uncalled bets, so the final pot is exactly the payout
+    expect(last.pot).toBe(WIN);
     // chips into the pot equal chips out of the stacks
     expect(last.committed.reduce((a, b) => a + b, 0)).toBe(last.pot);
     expect(hand.replay.won).toEqual({ 1: WIN });

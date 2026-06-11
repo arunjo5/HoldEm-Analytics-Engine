@@ -99,7 +99,6 @@ function convertHand(h, heroId) {
   let street = 0;
   let streetBet = setup.bb; // preflop the BB is the standing bet
   let winTotal = 0;
-  let uncalledTotal = 0;
 
   for (const e of h.events) {
     const p = e.payload;
@@ -141,8 +140,7 @@ function convertHand(h, heroId) {
         if (idx != null) wonBySeat[idx] = (wonBySeat[idx] || 0) + (p.value || 0);
         break;
       case EV.UNCALLED:
-        uncalledTotal += p.value || 0;
-        break;
+        break; // both sides return uncalled bets; nothing to track
       default:
         break;
     }
@@ -159,14 +157,14 @@ function convertHand(h, heroId) {
     }
   }
 
-  // rebuild and compare to PokerNow's pot (add back uncalled bets, which the
-  // engine leaves in the pot but PokerNow returns); mismatch = mis-parse
+  // rebuild and compare to PokerNow's pot (both return uncalled bets, so the
+  // final pot should equal the payout); mismatch = mis-parse
   let valid = false;
   let runResults = null;
   try {
     const frames = ReplayEngine.buildReplay(setup, actions, board);
     const last = frames[frames.length - 1];
-    valid = Math.abs(last.pot - uncalledTotal - winTotal) <= 1;
+    valid = Math.abs(last.pot - winTotal) <= 1;
 
     // Run it twice: award half the pot per board to that board's winner(s).
     // Only keep it if the per-board split reconciles with PokerNow's payouts.

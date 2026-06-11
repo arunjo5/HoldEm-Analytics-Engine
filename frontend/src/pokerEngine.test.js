@@ -316,9 +316,7 @@ describe('cardToId / idToCard encoding', () => {
 describe('input hardening', () => {
   const fullBoard = board('2h', '7d', '9c', '4s', '8h');
 
-  // skipped: no MAX_PLAYERS guard — a 10th player overflows the typed-array
-  // buffers and every equity silently comes back 0 instead of erroring
-  it.skip('rejects more than 9 active players', () => {
+  it('rejects more than 9 active players', () => {
     const ten = [
       hand('As', 'Ah'), hand('Ks', 'Kh'), hand('Qs', 'Qh'), hand('Js', 'Jh'), hand('Ts', 'Th'),
       hand('9s', '9h'), hand('8s', '8d'), hand('7s', '7h'), hand('6s', '6h'), hand('5s', '5h'),

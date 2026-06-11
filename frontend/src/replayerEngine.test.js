@@ -211,8 +211,8 @@ describe('liveState (builder helper)', () => {
       { seat: 2, type: 'bet', amount: 50, street: 0 },
     ], []);
     expect(st.handOver).toBe(true);
-    expect(st.pot).toBe(3);
-    expect(st.stacks[2]).toBe(198);
+    expect(st.pot).toBe(2); // BB's uncalled blind portion returned
+    expect(st.stacks[2]).toBe(199);
   });
 });
 
@@ -304,8 +304,7 @@ describe('short all-in calls & raises', () => {
 });
 
 describe('uncalled bets at fold-out', () => {
-  // engine never returns uncalled bets: pot stays 9 and stacks[3] 194, so the spec values fail
-  it.skip('returns the uncalled raise when everyone folds preflop', () => {
+  it('returns the uncalled raise when everyone folds preflop', () => {
     const setup = mkSetup(6);
     const actions = [
       { seat: 3, type: 'raise', amount: 6, street: 0 },
@@ -331,8 +330,7 @@ describe('uncalled bets at fold-out', () => {
     expect(f.filter(x => x.kind === 'deal').length).toBe(1);
   });
 
-  // same spec decision: bet 50 should come back (pot 4 / stack 198); engine keeps pot 54 / stack 148
-  it.skip('returns an uncalled flop bet to the bettor', () => {
+  it('returns an uncalled flop bet to the bettor', () => {
     const setup = mkSetup(2);
     const actions = [
       { seat: 0, type: 'call', street: 0 }, { seat: 1, type: 'check', street: 0 },

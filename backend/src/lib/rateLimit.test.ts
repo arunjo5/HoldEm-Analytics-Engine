@@ -81,20 +81,17 @@ describe('getClientIp degenerate and adversarial headers', () => {
     expect(getClientIp(req({ 'x-real-ip': '', 'x-forwarded-for': '3.3.3.3, 4.4.4.4' }))).toBe('3.3.3.3')
   })
 
-  // whitespace x-real-ip passes the truthy check and trims to '' — all such
-  // clients share one bucket key; pinned until the source falls back instead
-  it('returns "" for a whitespace-only x-real-ip (current behavior)', () => {
-    expect(getClientIp(req({ 'x-real-ip': '   ', 'x-forwarded-for': '3.3.3.3' }))).toBe('')
+  it('falls back to x-forwarded-for for a whitespace-only x-real-ip', () => {
+    expect(getClientIp(req({ 'x-real-ip': '   ', 'x-forwarded-for': '3.3.3.3' }))).toBe('3.3.3.3')
   })
 
   it('trims spaces around the first x-forwarded-for entry', () => {
     expect(getClientIp(req({ 'x-forwarded-for': ' 1.1.1.1 , 2.2.2.2' }))).toBe('1.1.1.1')
   })
 
-  // leading-comma xff also collapses to '' instead of 'unknown' — pinned
-  it('returns "" for a leading-comma x-forwarded-for (current behavior)', () => {
-    expect(getClientIp(req({ 'x-forwarded-for': ',2.2.2.2' }))).toBe('')
-    expect(getClientIp(req({ 'x-forwarded-for': ',' }))).toBe('')
+  it('falls back to unknown for a leading-comma x-forwarded-for', () => {
+    expect(getClientIp(req({ 'x-forwarded-for': ',2.2.2.2' }))).toBe('unknown')
+    expect(getClientIp(req({ 'x-forwarded-for': ',' }))).toBe('unknown')
   })
 
   it('ignores attacker-controlled x-forwarded-for whenever x-real-ip exists', () => {

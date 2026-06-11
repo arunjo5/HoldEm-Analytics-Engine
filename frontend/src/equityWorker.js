@@ -20,6 +20,11 @@ self.onmessage = (e) => {
       deltaTieShares: r.tieShares,
       deltaValid: r.valid,
     });
+    if (r.valid === 0) {
+      // impossible deal — no batch will ever make progress
+      self.postMessage({ jobId, type: 'done' });
+      return;
+    }
     setTimeout(runNextBatch, 0);
   }
 
