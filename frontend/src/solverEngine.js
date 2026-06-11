@@ -68,8 +68,8 @@ function buildTree(spot) {
     const seen = new Set();
     for (const b of onSizes) {
       let amt = Math.round(pot * b.pct / 100);
-      if (amt <= 0) continue;
       if (amt >= rem) amt = rem;
+      if (amt <= 0) continue;
       if (seen.has(amt)) continue;
       seen.add(amt);
       acts.push({ id: b.id, kind: 'bet', pct: b.pct }); amts.push(amt);
@@ -292,7 +292,7 @@ export function solve(board, oopKeys, ipKeys, spot, opts = {}, onProgress) {
     const evO = rootValue(0, -1), evI = rootValue(1, -1);
     const brO = rootValue(0, 0), brI = rootValue(1, 1);
     const ev = ((brO - evO) + (brI - evI)) / 2;
-    return { evOOP: evO, evIP: evI, exploit: Math.max(0, ev) / spot.pot * 100, brO, brI };
+    return { evOOP: evO, evIP: evI, exploit: spot.pot > 0 ? Math.max(0, ev) / spot.pot * 100 : 0, brO, brI };
   }
 
   // ── run CFR+ ──
@@ -336,7 +336,8 @@ export function solve(board, oopKeys, ipKeys, spot, opts = {}, onProgress) {
     order.forEach((idx, k) => { strRank[idx] = side.length > 1 ? k / (side.length - 1) : 0.5; });
     for (let i = 0; i < side.length; i++) {
       const cmb = side[i];
-      if (restrictIds && !restrictIds.has(cmb.id)) continue;
+      const rev = cmb.cards[1].v + cmb.cards[1].s + cmb.cards[0].v + cmb.cards[0].s;
+      if (restrictIds && !restrictIds.has(cmb.id) && !restrictIds.has(rev)) continue;
       const weights = {};
       for (let a = 0; a < A; a++) weights[node.actions[a].id] = avgStrat(node, i, a);
       combosOut.push({ id: cmb.id, hkey: cmb.hkey, cards: cmb.cards, cat: cmb.cat, str: strRank[i], weights });
@@ -475,10 +476,10 @@ export function equityMatchup(heroSide, villainSide, board) {
   return finalizeEq(win, tie, loss, total, hc, vc, 'simulated', total);
 }
 function finalizeEq(win, tie, loss, total, hc, vc, method, samples) {
-  const t = total || 1;
+  if (!total) return { hero: null, villain: null, heroCount: hc, villCount: vc, method, samples: 0 };
   return {
-    hero: { win: win / t * 100, tie: tie / t * 100, equity: (win + tie / 2) / t * 100 },
-    villain: { win: loss / t * 100, tie: tie / t * 100, equity: (loss + tie / 2) / t * 100 },
+    hero: { win: win / total * 100, tie: tie / total * 100, equity: (win + tie / 2) / total * 100 },
+    villain: { win: loss / total * 100, tie: tie / total * 100, equity: (loss + tie / 2) / total * 100 },
     heroCount: hc, villCount: vc, method, samples,
   };
 }

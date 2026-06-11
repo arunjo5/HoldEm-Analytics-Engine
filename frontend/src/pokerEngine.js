@@ -187,6 +187,7 @@ export function simulate(players, board, sims) {
   }
   const numActive = active.length;
   if (numActive === 0) return { wins: {}, ties: {}, tieShares: {}, valid: 0 };
+  if (numActive > MAX_PLAYERS) throw new Error(`too many players: ${numActive} > ${MAX_PLAYERS}`);
 
   for (let pi = 0; pi < numActive; pi++) PLAYER_IDX[pi] = active[pi].idx;
 

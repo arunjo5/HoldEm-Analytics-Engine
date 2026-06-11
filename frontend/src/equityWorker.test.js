@@ -83,9 +83,7 @@ describe('equityWorker batching contract', () => {
     expect(messages()).toEqual([{ jobId: 'j0', type: 'done' }]);
   });
 
-  // skipped: worker never terminates when simulate yields valid 0 — totalRun
-  // never advances, so the setTimeout chain posts zero-delta batches forever
-  it.skip('terminates on impossible deals', async () => {
+  it('terminates on impossible deals', async () => {
     post({ jobId: 'jx', players: [hand('As', 'Kd'), hand('As', 'Qd')], board: [], maxSims: 50, batchSize: 10 });
     for (let i = 0; i < 50 && !messages().some((m) => m.type === 'done'); i++) {
       await vi.advanceTimersByTimeAsync(1);

@@ -195,14 +195,12 @@ describe('solve — card removal and the empty path', () => {
     expect(clean.oopCount).toBe(6);
   });
 
-  it('restrict ids: solve accepts either card order, node output needs the exact id (UI sends both)', () => {
-    const reversed = solve(board('Qd', '7d', '2c', '8h', '3s'), ['AKs'], ['22'], spotOf(),
+  it('restrict ids match in either card order', () => {
+    const r = solve(board('Qd', '7d', '2c', '8h', '3s'), ['AKs'], ['22'], spotOf(),
       { iterations: 8, oopRestrict: new Set(['KsAs']) });
-    expect(reversed.oopCount).toBe(1);
-    const both = solve(board('Qd', '7d', '2c', '8h', '3s'), ['AKs'], ['22'], spotOf(),
-      { iterations: 8, oopRestrict: new Set(['KsAs', 'AsKs']) });
-    expect(both.nodeSolves.oop_first.combos).toHaveLength(1);
-    expect(both.nodeSolves.oop_first.combos[0].id).toBe('AsKs');
+    expect(r.oopCount).toBe(1);
+    expect(r.nodeSolves.oop_first.combos).toHaveLength(1);
+    expect(r.nodeSolves.oop_first.combos[0].id).toBe('AsKs');
   });
 });
 
@@ -251,9 +249,7 @@ describe('buildTree — action sets observed through solve()', () => {
   // depth-1/2 raise nodes are not display nodes and buildTree is not exported
   it.skip('caps raise depth at all-in then fold/call only', () => {});
 
-  // bug: with stack 0 the clamp to rem runs after the amt<=0 guard, emitting a
-  // 0-chip bet whose facing node lets villain fold the pot away for free
-  it.skip('stack 0 yields a check-only tree', () => {
+  it('stack 0 yields a check-only tree', () => {
     const r = solve(LOW, ['AA'], ['KK'], spotOf({ stack: 0, betSizes: sizes(75), allIn: false }), { iterations: 8 });
     expect(r.nodes.find((n) => n.id === 'oop_first').actions.map((a) => a.id)).toEqual(['check']);
   });
@@ -352,9 +348,7 @@ describe('equityMatchup — exact full-board path', () => {
     expect(q).toEqual({ hero: null, villain: null, heroCount: 0, villCount: 1, method: 'exact', samples: 0 });
   });
 
-  // bug: finalizeEq's `total || 1` reports 0% win/tie/equity for BOTH sides
-  // when every pair is card-blocked, instead of the null shape
-  it.skip('card-blocked single pair returns the null shape', () => {
+  it('card-blocked single pair returns the null shape', () => {
     const q = equityMatchup(hand('As', 'Ks'), hand('As', 'Qd'), FULL);
     expect(q.hero).toBeNull();
     expect(q.villain).toBeNull();
@@ -434,9 +428,7 @@ describe('solve — trace, progress, meta plumbing', () => {
     expect(MAIN.meta.repBetPct).toBe(75);
   });
 
-  // bug: exploitabilityPctPot divides by spot.pot, so pot 0 makes
-  // meta.exploitPctPot NaN instead of 0/empty
-  it.skip('pot 0 keeps exploitability finite', () => {
+  it('pot 0 keeps exploitability finite', () => {
     const r = solve(LOW, ['AA'], ['KK'], spotOf({ pot: 0, betSizes: sizes(75), allIn: false }), { iterations: 8 });
     expect(Number.isFinite(r.meta.exploitPctPot)).toBe(true);
   });

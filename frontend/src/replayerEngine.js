@@ -166,6 +166,20 @@ function applyAction(st, action) {
   }
 
   if (activeCount(st) <= 1) {
+    // return the uncalled portion of the last bet to its bettor
+    let w = -1;
+    for (let i = 0; i < st.N; i++) if (!st.folded[i]) w = i;
+    if (w >= 0) {
+      let high = 0;
+      for (let i = 0; i < st.N; i++) if (i !== w && st.streetContrib[i] > high) high = st.streetContrib[i];
+      const refund = st.streetContrib[w] - high;
+      if (refund > 0) {
+        st.stacks[w] += refund;
+        st.streetContrib[w] -= refund;
+        st.committed[w] -= refund;
+        st.pot -= refund;
+      }
+    }
     st.handOver = true;
     st.nextSeat = null;
     return;

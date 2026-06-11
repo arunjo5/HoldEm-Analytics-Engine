@@ -38,7 +38,7 @@ describe('cleanName', () => {
   })
 
   // sanitizer hole: U+2066-2069 and U+061C fall outside every strip range
-  it.skip('strips bidi isolates and the Arabic letter mark', () => {
+  it('strips bidi isolates and the Arabic letter mark', () => {
     for (const cp of [0x2066, 0x2067, 0x2068, 0x2069, 0x061c]) {
       expect(cleanName('a' + String.fromCodePoint(cp) + 'b')).toBe('ab')
     }

@@ -30,6 +30,8 @@ export function cleanName(s: string): string {
       (c >= 0x200b && c <= 0x200f) ||
       (c >= 0x202a && c <= 0x202e) ||
       (c >= 0x2060 && c <= 0x2064) ||
+      (c >= 0x2066 && c <= 0x2069) ||
+      c === 0x061c ||
       c === 0xfeff
     ) {
       continue

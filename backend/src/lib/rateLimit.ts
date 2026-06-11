@@ -28,10 +28,10 @@ export function rateLimit(key: string, limit: number, windowMs: number) {
 
 // client ip for rate-limit keys; prefer vercel's platform-set x-real-ip
 export function getClientIp(req: Request): string {
-  const realIp = req.headers.get('x-real-ip')
-  if (realIp) return realIp.trim()
-  const xff = req.headers.get('x-forwarded-for')
-  if (xff) return xff.split(',')[0].trim()
+  const realIp = (req.headers.get('x-real-ip') || '').trim()
+  if (realIp) return realIp
+  const first = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+  if (first) return first
   return 'unknown'
 }
 

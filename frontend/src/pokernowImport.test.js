@@ -196,10 +196,10 @@ describe('pot reconciliation (valid flag)', () => {
     expect(handsFor(withWin(198), 'p_alice')[0].valid).toBe(false);
   });
 
-  it('fails reconciliation when the UNCALLED event is missing', () => {
+  it('reconciles whether or not the UNCALLED event is present', () => {
     const s = clone(SAMPLE);
     s.hands[0].events = s.hands[0].events.filter((e) => e.payload.type !== 16);
-    expect(handsFor(s, 'p_alice')[0].valid).toBe(false);
+    expect(handsFor(s, 'p_alice')[0].valid).toBe(true);
   });
 
   it('contains a replay blow-up from an action on an unseated seat as valid:false', () => {
