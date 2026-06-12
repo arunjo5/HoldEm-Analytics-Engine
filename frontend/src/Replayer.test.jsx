@@ -399,18 +399,30 @@ function enterActionPhase(count, pairs) {
 }
 
 describe('HandBuilder flow', () => {
-  it('blocks Enter action until every seat has cards, with the right note', () => {
+  it('cards are optional: Enter action stays enabled and the note counts cardless seats', () => {
     show(undefined);
     fireEvent.click(screen.getByRole('button', { name: '2' }));
-    expect(screen.getByText('Enter action →')).toBeDisabled();
-    expect(screen.getByText('2 players still need cards')).toBeInTheDocument();
+    expect(screen.getByText('Enter action →')).not.toBeDisabled();
+    expect(screen.getByText('2 players without cards')).toBeInTheDocument();
     fireEvent.click(screen.getAllByText('+ cards')[0]);
     pickCards(PAIRS2[0]);
-    expect(screen.getByText('1 player still needs cards')).toBeInTheDocument();
+    expect(screen.getByText('1 player without cards')).toBeInTheDocument();
     fireEvent.click(screen.getAllByText('+ cards')[0]);
     pickCards(PAIRS2[1]);
-    expect(screen.queryByText(/still need/)).toBeNull();
+    expect(screen.queryByText(/players? without cards/)).toBeNull();
     expect(screen.getByText('Enter action →')).not.toBeDisabled();
+  });
+
+  it('a hand built with no cards replays with no equity readout', async () => {
+    show(undefined);
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByText('Enter action →'));
+    fireEvent.click(screen.getByText('Fold'));
+    fireEvent.click(screen.getByText('Watch replay →'));
+    expect(screen.getByText('Blinds posted')).toBeInTheDocument();
+    await flushEquity();
+    expect(calcMock).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('.replay-seat-eq')).toHaveLength(0);
   });
 
   it('changing player count preserves kept seats and refills new ones', () => {

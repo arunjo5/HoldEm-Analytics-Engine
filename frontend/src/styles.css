@@ -1635,6 +1635,14 @@ body {
 }
 .replay-table .felt-rim { position: absolute; inset: 64px 86px; border-radius: 50%/50%; background: var(--felt-rim); }
 .replay-table .felt { position: absolute; inset: 76px 98px; border-radius: 50%/50%; background: var(--felt); }
+.replay-table.compact .felt-rim { inset: 22px 6px; }
+.replay-table.compact .felt { inset: 32px 16px; }
+.replay-table.crowded .replay-seat { gap: 3px; }
+.replay-table.crowded .replay-seat-plate { padding: 3px 6px; min-width: 0; max-width: 104px; }
+.replay-table.crowded .replay-seat-top { gap: 4px; margin-bottom: 2px; }
+.replay-table.crowded .replay-seat-name { max-width: 44px; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.replay-table.crowded .replay-seat-pos { font-size: 7px; padding: 2px 3px; min-width: 0; }
+.replay-table.crowded .replay-stack-num { font-size: 9px; }
 .replay-table .felt::before {
   content: ''; position: absolute; inset: 14px; border-radius: 50%/50%;
   border: 1px solid rgba(255,255,255,0.05);
@@ -2254,6 +2262,38 @@ body {
 @media (max-width: 720px) {
   .builder-action-btns { flex-direction: column; }
   .builder-bet-group { min-width: 0; width: 100%; }
+
+  .app { padding: 10px 10px 16px; gap: 10px; }
+  .topbar { gap: 8px; }
+  .toolbar { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+  .btn { padding: 7px 10px; font-size: 11px; }
+  .status-bar { display: none; }
+  .user-chip-name { max-width: 72px; }
+
+  .results { grid-template-columns: 1fr; gap: 18px; padding: 14px 14px 18px; }
+  .results-table .equity-cell { width: 90px; }
+
+  .picker-overlay { padding: 10px; align-items: flex-start; }
+  .picker { max-height: calc(100dvh - 20px); }
+  .picker-head { flex-wrap: wrap; gap: 10px; }
+  .picker-row { gap: 3px; }
+  .picker-grid { padding: 12px; }
+  .pcard svg { width: 11px; height: 11px; }
+  .pcard-rank { font-size: 10px; }
+  .rg-grid { gap: 3px; }
+  .rg-cell { font-size: 8px; }
+
+  .auth-modal, .share-modal { width: 100%; }
+  .drawer { width: 100vw; max-width: 100vw; }
+
+  .replayer-header { flex-wrap: wrap; row-gap: 6px; padding: 10px 12px; gap: 10px; }
+  .replayer-header-right { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+  .replayer-body { padding: 10px; }
+
+  .builder { padding: 14px 12px 16px; }
+  .builder-seat-row { flex-wrap: wrap; row-gap: 6px; }
+  .builder-seat-name { min-width: 50px; }
+  .builder-seat-stack input { width: 58px; }
 }
 
 

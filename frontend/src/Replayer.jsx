@@ -24,10 +24,11 @@ const ALL_RANGE_KEYS = (() => {
 // Seats around the felt with EQUAL ARC LENGTH spacing (same approach as the
 // main calculator table) so large plates never bunch up / overlap. Seat 0
 // (BTN) sits at the bottom, near the viewer.
-function replaySeatPositions(n) {
+function replaySeatPositions(n, compact) {
   const cx = 50, cy = 50;
-  const rx_pct = 44, ry_pct = 35; // same ellipse as the main calculator table
-  const STAGE_W = 1080, STAGE_H = 600;
+  // desktop: same ellipse as the main calculator table; compact: portrait phone stage
+  const rx_pct = compact ? 36 : 44, ry_pct = compact ? 42 : 35;
+  const STAGE_W = compact ? 460 : 1080, STAGE_H = compact ? 640 : 600;
   const rxPx = (rx_pct / 100) * STAGE_W;
   const ryPx = (ry_pct / 100) * STAGE_H;
   const SAMPLES = 4000;
@@ -127,19 +128,25 @@ function useFrameEquity(setup, board, frame) {
 // Local stage scaler (keeps the table a fixed canvas, letterboxed).
 // The felt is 1060x600, but seats (cards + plates) poke past its top/bottom
 // edge. Scale to a taller canvas so those overhangs never get clipped.
-const STAGE_W = 1080, STAGE_FELT_H = 600, STAGE_PAD_Y = 36;
-const STAGE_H = STAGE_FELT_H + STAGE_PAD_Y * 2;
+// desktop landscape stage vs compact portrait stage for narrow (phone) containers
+const DESKTOP_STAGE = { w: 1080, feltH: 600, padY: 36 };
+const COMPACT_STAGE = { w: 460, feltH: 640, padY: 30 };
 
 function ReplayStage({ children }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
+  const [compact, setCompact] = useState(false);
   useEffect(() => {
     function update() {
       const el = ref.current;
       if (!el || !el.parentElement) return;
       const w = el.parentElement.clientWidth - 8;
       const h = el.parentElement.clientHeight - 8;
-      const s = Math.min(w / STAGE_W, h / STAGE_H, 1.15);
+      const c = w > 0 && w < 600;
+      const S = c ? COMPACT_STAGE : DESKTOP_STAGE;
+      const H = S.feltH + S.padY * 2;
+      const s = Math.min(w / S.w, h / H, 1.15);
+      setCompact(c);
       setScale(s > 0 ? s : 1);
     }
     update();
@@ -148,10 +155,12 @@ function ReplayStage({ children }) {
     window.addEventListener('resize', update);
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
+  const S = compact ? COMPACT_STAGE : DESKTOP_STAGE;
+  const H = S.feltH + S.padY * 2;
   return (
-    <div ref={ref} className="replay-stage-scaler" style={{ width: STAGE_W * scale, height: STAGE_H * scale }}>
-      <div className="replay-stage-inner" style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${scale})` }}>
-        {children}
+    <div ref={ref} className="replay-stage-scaler" style={{ width: S.w * scale, height: H * scale }}>
+      <div className="replay-stage-inner" style={{ width: S.w, height: H, transform: `scale(${scale})` }}>
+        {children(compact, S)}
       </div>
     </div>
   );
@@ -168,7 +177,7 @@ function BetChip({ amount, money }) {
   );
 }
 
-function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner, resultWon, twice }) {
+function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner, resultWon, twice, cardSize = 'mdr' }) {
   const s = setup.seats[seat];
   const folded = frame.folded[seat];
   const allin = frame.allin[seat];
@@ -187,8 +196,8 @@ function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner, resul
     >
       <div className="replay-seat-cards">
         {known
-          ? s.cards.map((c, i) => <PlayingCard key={i} card={c} size="mdr" dim={folded} />)
-          : <><CardBack size="mdr" /><CardBack size="mdr" /></>}
+          ? s.cards.map((c, i) => <PlayingCard key={i} card={c} size={cardSize} dim={folded} />)
+          : <><CardBack size={cardSize} /><CardBack size={cardSize} /></>}
       </div>
       <div className="replay-seat-plate">
         <div className="replay-seat-top">
@@ -246,11 +255,22 @@ function BoardRow({ cards, vis, size, label, dim }) {
   );
 }
 
-function ReplayTable({ setup, board, board2, frame, equity, winners, resultWon }) {
-  const positions = useMemo(() => replaySeatPositions(setup.seats.length), [setup.seats.length]);
+function ReplayTable(props) {
   return (
     <ReplayStage>
-      <div className="replay-table" style={{ top: STAGE_PAD_Y }}>
+      {(compact, S) => <ReplayTableBody {...props} compact={compact} S={S} />}
+    </ReplayStage>
+  );
+}
+
+function ReplayTableBody({ setup, board, board2, frame, equity, winners, resultWon, compact, S }) {
+  const positions = useMemo(() => replaySeatPositions(setup.seats.length, compact), [setup.seats.length, compact]);
+  const crowded = compact && setup.seats.length >= 7;
+  return (
+    <div
+      className={'replay-table' + (compact ? ' compact' : '') + (crowded ? ' crowded' : '')}
+      style={{ top: S.padY, width: S.w, height: S.feltH }}
+    >
         <div className="felt-rim" />
         <div className="felt" />
         <div className="replay-center">
@@ -260,11 +280,11 @@ function ReplayTable({ setup, board, board2, frame, equity, winners, resultWon }
           </div>
           {frame.twice ? (
             <div className="replay-boards-twice">
-              <BoardRow cards={board} vis={frame.run1Dealt} size="mdr" label="RUN 1" />
-              <BoardRow cards={board2} vis={frame.run2Dealt} size="mdr" label="RUN 2" dim={frame.activeRun < 2} />
+              <BoardRow cards={board} vis={frame.run1Dealt} size={compact ? 'md' : 'mdr'} label="RUN 1" />
+              <BoardRow cards={board2} vis={frame.run2Dealt} size={compact ? 'md' : 'mdr'} label="RUN 2" dim={frame.activeRun < 2} />
             </div>
           ) : (
-            <BoardRow cards={board} vis={frame.boardDealt} size="lgr" />
+            <BoardRow cards={board} vis={frame.boardDealt} size={compact ? 'mdr' : 'lgr'} />
           )}
           <div className="replay-street-tag">{frame.streetName}</div>
         </div>
@@ -280,10 +300,10 @@ function ReplayTable({ setup, board, board2, frame, equity, winners, resultWon }
             isWinner={winners && winners.includes(k)}
             resultWon={resultWon}
             twice={!!frame.twice}
+            cardSize={compact ? (crowded ? 'sm' : 'md') : 'mdr'}
           />
         ))}
-      </div>
-    </ReplayStage>
+    </div>
   );
 }
 
@@ -398,7 +418,6 @@ function HandBuilder({ onComplete, onCancel }) {
     return out;
   }, [seats, board]);
 
-  const allHaveCards = seats.every(s => s.cards && s.cards.length === 2);
   const missingCount = seats.filter(s => !(s.cards && s.cards.length === 2)).length;
 
   function setupSetup() {
@@ -549,14 +568,14 @@ function HandBuilder({ onComplete, onCancel }) {
               </div>
             ))}
           </div>
-          <div className="builder-hint">Every player needs hole cards - equities are computed from the exact two cards in each hand.</div>
+          <div className="builder-hint">Hole cards are optional - seats without cards show card backs and sit out of the equity readout.</div>
         </div>
 
         <div className="builder-foot">
-          {!allHaveCards && (
-            <span className="builder-foot-note">{missingCount} player{missingCount === 1 ? '' : 's'} still {missingCount === 1 ? 'needs' : 'need'} cards</span>
+          {missingCount > 0 && (
+            <span className="builder-foot-note">{missingCount} player{missingCount === 1 ? '' : 's'} without cards</span>
           )}
-          <button className="btn btn-primary" onClick={startActions} disabled={!allHaveCards}>Enter action →</button>
+          <button className="btn btn-primary" onClick={startActions}>Enter action →</button>
         </div>
 
         {cardTarget != null && (
