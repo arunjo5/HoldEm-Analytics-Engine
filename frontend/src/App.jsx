@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as PokerEngine from './pokerEngine.js';
-import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_GLYPH, SUIT_RED } from './Cards.jsx';
+import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_GLYPH, SUIT_RED, BoardStrip } from './Cards.jsx';
 import { CardPicker, RangePicker, SUIT_ORDER, VALUE_ORDER } from './Pickers.jsx';
 import { PlayerSeat } from './Seat.jsx';
 import { useAuth } from './AuthContext.jsx';
@@ -22,11 +22,9 @@ const THEME_KEY = 'holdem_theme_v1';
 // 9 seats arranged around the felt with EQUAL ARC LENGTH between neighbours
 // (not equal angle) — keeps them evenly spaced even on an elongated felt.
 // Player 1 sits at the top.
-const SEAT_POSITIONS = (() => {
+function computeSeatPositions(rx_pct, ry_pct, STAGE_W, STAGE_H) {
   const N = 9;
   const cx_pct = 50, cy_pct = 50;
-  const rx_pct = 44, ry_pct = 35; // ry pulled in slightly so apex seats clear the toolbar / results panel
-  const STAGE_W = 1080, STAGE_H = 600;
   const rxPx = (rx_pct / 100) * STAGE_W;
   const ryPx = (ry_pct / 100) * STAGE_H;
 
@@ -60,6 +58,18 @@ const SEAT_POSITIONS = (() => {
     });
   }
   return positions;
+}
+
+// desktop landscape stage vs near-portrait stage for phones
+const CALC_STAGE = { w: 1080, h: 600 };
+const CALC_STAGE_COMPACT = { w: 520, h: 790 };
+const SEAT_POSITIONS = computeSeatPositions(44, 35, CALC_STAGE.w, CALC_STAGE.h);
+const SEAT_POSITIONS_COMPACT = (() => {
+  const pos = computeSeatPositions(37, 41, CALC_STAGE_COMPACT.w, CALC_STAGE_COMPACT.h);
+  // On the narrow portrait felt the bottom seats (Player 5 & 6) sit too close to
+  // the lower-side seats (4 & 7) — drop them a touch so range thumbnails clear.
+  [4, 5].forEach((i) => { pos[i] = { ...pos[i], y: pos[i].y + 4 }; });
+  return pos;
 })();
 
 export default function App() {
@@ -70,7 +80,7 @@ export default function App() {
     catch { return Array(9).fill(null); }
   });
   const [picker, setPicker] = useState(null);
-  const [boardPicker, setBoardPicker] = useState(null);
+  const [boardDeal, setBoardDeal] = useState(null);
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem(THEME_KEY) || 'light'; } catch { return 'light'; }
   });
@@ -332,6 +342,8 @@ export default function App() {
 
   // Only preflop (0), flop (3), turn (4), river (5) are valid streets.
   const validBoard = board.length === 0 || board.length === 3 || board.length === 4 || board.length === 5;
+  // Clear all only matters once something is on the table.
+  const hasEntry = players.some(Boolean) || board.length > 0 || playerNames.some(Boolean);
 
   useEffect(() => {
     const myVer = ++calcVersion.current;
@@ -466,20 +478,27 @@ export default function App() {
     });
   }
 
-  function openBoardPicker(idx) {
-    setBoardPicker({ index: idx, selectedCards: board[idx] ? [board[idx]] : [] });
+  // Board entry by street: flop deals 3 at once, turn/river 1 each.
+  function onDealBoard(street) {
+    const at = street === 'flop' ? 0 : street === 'turn' ? 3 : 4;
+    setBoardDeal({ street, at, need: street === 'flop' ? 3 : 1, selectedCards: [] });
   }
-  function commitBoardCard(idx, card) {
-    setBoard(prev => {
-      const n = [...prev];
-      n[idx] = card;
-      while (n.length && !n[n.length - 1]) n.pop();
-      return n.filter(Boolean);
+  function onClearBoardFrom(idx) {
+    setBoard(prev => prev.slice(0, idx));
+  }
+  function pickBoardDealCard(c) {
+    setBoardDeal(d => {
+      const sel = [...d.selectedCards];
+      const ix = sel.findIndex(x => x.v === c.v && x.s === c.s);
+      if (ix >= 0) sel.splice(ix, 1);
+      else if (sel.length < d.need) sel.push(c);
+      return { ...d, selectedCards: sel };
     });
-    setBoardPicker(null);
   }
-  function removeBoardCard(idx) {
-    setBoard(prev => prev.filter((_, i) => i !== idx));
+  function confirmBoardDeal() {
+    if (!boardDeal || boardDeal.selectedCards.length !== boardDeal.need) return;
+    setBoard(prev => [...prev.filter(Boolean).slice(0, boardDeal.at), ...boardDeal.selectedCards]);
+    setBoardDeal(null);
   }
 
   const potNum = parseFloat(pot) || 0;
@@ -622,7 +641,7 @@ export default function App() {
   // Profile menu + history drawer — shared between the calculator and the replayer
   // so a user can open another hand from history without leaving the replayer.
   const userMenuEl = user ? (
-    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} onOpenShare={openShare} />
+    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} onOpenShare={openShare} onOpenUpload={openUpload} />
   ) : (
     <button className="btn btn-signin" onClick={signIn}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -683,7 +702,7 @@ export default function App() {
               <span className="dot-pulse" /> calculating · {results.sims.toLocaleString()} sims
             </div>
           )}
-          <button className="btn btn-ghost" onClick={clearAll}>Clear all</button>
+          {hasEntry && <button className="btn btn-ghost" onClick={clearAll}>Clear all</button>}
           <button className="btn btn-ghost btn-replayer" onClick={openReplayer} title="Open the hand replayer">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="5 3 19 12 5 21 5 3" />
@@ -696,13 +715,6 @@ export default function App() {
             </svg>
             Solver
           </button>
-          <button className="btn btn-ghost btn-upload" onClick={openUpload} title="Import hands from a PokerNow log">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 16V4" /><path d="M7 9l5-5 5 5" />
-              <path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Upload log
-          </button>
           {user && (
             <button className="btn btn-ghost" onClick={saveHand} disabled={saving}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -711,17 +723,19 @@ export default function App() {
               {saving ? 'Saving…' : 'Favorite'}
             </button>
           )}
+        </div>
+        <div className="topbar-account">
           <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
             {theme === 'dark' ? '☀' : '☾'}
           </button>
-          <div className="topbar-divider" />
           {userMenuEl}
         </div>
       </div>
 
       <div className="stage-wrap">
         <StageScaler>
-          <div className="stage">
+          {(compact) => (
+          <div className={'stage' + (compact ? ' compact' : '')} style={compact ? { width: CALC_STAGE_COMPACT.w, height: CALC_STAGE_COMPACT.h } : null}>
             <div className="felt-rim" />
             <div className="felt" />
 
@@ -735,19 +749,10 @@ export default function App() {
                'River'}
             </div>
             <div className="board">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <BoardSlot
-                  key={i}
-                  idx={i}
-                  card={board[i]}
-                  onClick={() => openBoardPicker(i)}
-                  onRemove={() => removeBoardCard(i)}
-                  active={boardPicker && boardPicker.index === i}
-                />
-              ))}
+              <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size={compact ? 'bd' : 'lg'} />
             </div>
             {/* Seats */}
-            {SEAT_POSITIONS.map((pos, i) => (
+            {(compact ? SEAT_POSITIONS_COMPACT : SEAT_POSITIONS).map((pos, i) => (
               <div key={i} className="seat-wrap" style={{ left: pos.x + '%', top: pos.y + '%' }}>
                 <PlayerSeat
                   index={i}
@@ -762,6 +767,7 @@ export default function App() {
               </div>
             ))}
           </div>
+          )}
         </StageScaler>
       </div>
 
@@ -789,17 +795,17 @@ export default function App() {
           onCommitRange={(keys) => commitRange(picker.seat, keys)}
         />
       )}
-      {boardPicker && (
-        <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) setBoardPicker(null); }}>
+      {boardDeal && (
+        <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) setBoardDeal(null); }}>
           <CardPicker
-            title={`Board card ${boardPicker.index + 1}`}
-            usedCards={usedCards.filter(c => !(board[boardPicker.index] && c.v === board[boardPicker.index].v && c.s === board[boardPicker.index].s))}
-            selected={boardPicker.selectedCards}
-            maxCards={1}
-            onPick={(c) => commitBoardCard(boardPicker.index, c)}
-            onConfirm={() => boardPicker.selectedCards[0] && commitBoardCard(boardPicker.index, boardPicker.selectedCards[0])}
-            onClear={() => { removeBoardCard(boardPicker.index); setBoardPicker(null); }}
-            onClose={() => setBoardPicker(null)}
+            title={'Deal ' + boardDeal.street}
+            usedCards={usedCards}
+            selected={boardDeal.selectedCards}
+            maxCards={boardDeal.need}
+            onPick={pickBoardDealCard}
+            onConfirm={confirmBoardDeal}
+            onClear={() => setBoardDeal(d => ({ ...d, selectedCards: [] }))}
+            onClose={() => setBoardDeal(null)}
           />
         </div>
       )}
@@ -879,7 +885,7 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
 }
 
 // ─── UserChip — avatar dropdown in the topbar ───
-function UserChip({ user, onSignOut, onOpenHistory, onOpenShare }) {
+function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -905,6 +911,12 @@ function UserChip({ user, onSignOut, onOpenHistory, onOpenShare }) {
             <div className="user-menu-name">{user.name || 'Account'}</div>
             <div className="user-menu-email">{user.email}</div>
           </div>
+          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenUpload(); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 16V4" /><path d="M7 9l5-5 5 5" /><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+            </svg>
+            Import PokerNow log
+          </button>
           <button className="user-menu-item" onClick={() => { setOpen(false); onOpenHistory(); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
@@ -1005,13 +1017,16 @@ function toHistoryItem(s) {
 function StageScaler({ children }) {
   const ref = useRef(null);
   const [scale, setScale] = useState(1);
+  const [compact, setCompact] = useState(false);
   useEffect(() => {
     function update() {
       const el = ref.current;
       if (!el) return;
-      const wrap = el.parentElement;
-      const wrapW = wrap.clientWidth - 8;
-      const s = Math.min(wrapW / 1080, 1);
+      const wrapW = el.parentElement.clientWidth - 8;
+      const c = wrapW > 0 && wrapW < 600;
+      const S = c ? CALC_STAGE_COMPACT : CALC_STAGE;
+      const s = Math.min(wrapW / S.w, 1);
+      setCompact(c);
       setScale(s > 0 ? s : 1);
     }
     update();
@@ -1020,38 +1035,19 @@ function StageScaler({ children }) {
     window.addEventListener('resize', update);
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
+  const S = compact ? CALC_STAGE_COMPACT : CALC_STAGE;
   return (
     <div ref={ref} className="stage-scaler" style={{
-      width: 1080 * scale,
-      height: 600 * scale,
+      width: S.w * scale,
+      height: S.h * scale,
     }}>
       <div className="stage-inner" style={{
-        width: 1080,
-        height: 600,
+        width: S.w,
+        height: S.h,
         transform: `scale(${scale})`,
       }}>
-        {children}
+        {children(compact)}
       </div>
-    </div>
-  );
-}
-
-function BoardSlot({ idx, card, onClick, onRemove, active }) {
-  return (
-    <div className="board-slot" style={{ position: 'relative' }}>
-      {card ? (
-        <button onClick={onClick} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', position: 'relative' }}>
-          <PlayingCard card={card} size="lg" />
-          <span
-            className="board-remove-btn"
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          >×</span>
-        </button>
-      ) : (
-        <button onClick={onClick} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}>
-          <EmptyCardSlot size="lg" label="+" active={active} />
-        </button>
-      )}
     </div>
   );
 }
@@ -1186,7 +1182,7 @@ function ResultsPanel({ players, playerNames, results, boardLen, validBoard, pot
           </div>
         </div>
         {active.length === 0 ? (
-          <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
+          <div className="results-empty" style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-faint)', fontSize: 12 }}>
             Click any seat to deal cards or assign a range.
           </div>
         ) : (

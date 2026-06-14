@@ -72,11 +72,12 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 4px 8px;
   gap: 16px;
   flex-wrap: wrap;
 }
+.topbar-account { display: flex; align-items: center; gap: 8px; }
 .brand {
   display: flex;
   align-items: baseline;
@@ -144,6 +145,12 @@ body {
 
 .stage-watermark { display: none; }
 
+/* near-portrait phone stage */
+.stage.compact .felt-rim { inset: 26px 8px; }
+.stage.compact .felt { inset: 36px 18px; }
+.stage.compact .board { gap: 6px; }
+.stage.compact .board-label { top: calc(50% + 50px); max-width: 320px; text-align: center; }
+
 /* Board cards row */
 .board-remove-btn {
   position: absolute;
@@ -187,6 +194,10 @@ body {
   z-index: 3;
   align-items: center;
 }
+.board-strip-btn { background: transparent; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; transition: transform 0.15s ease; }
+.board-strip-btn:not(:disabled):hover { transform: translateY(-1px); }
+.board-strip-btn:disabled { cursor: default; opacity: 0.45; }
+.board-flop-cards { display: inline-flex; gap: 3px; align-items: center; }
 .board-label {
   position: absolute;
   left: 50%;
@@ -740,6 +751,7 @@ body {
   align-items: center;
   font-size: 12px;
   color: var(--text-dim);
+  margin-left: auto; /* push action buttons + account group to the right on desktop */
 }
 .chip {
   background: var(--bg-elev);
@@ -2264,13 +2276,22 @@ body {
   .builder-bet-group { min-width: 0; width: 100%; }
 
   .app { padding: 10px 10px 16px; gap: 10px; }
-  .topbar { gap: 8px; }
-  .toolbar { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+  /* row 1: brand (left) + account controls (theme · sign in) top-right;
+     nav buttons (Clear all · Replayer · Solver) sit right-aligned just below them */
+  .topbar { gap: 8px; row-gap: 8px; }
+  .brand { order: 1; }
+  .topbar-account { order: 2; margin-left: auto; }
+  .toolbar { order: 3; flex-basis: 100%; margin-left: 0; flex-wrap: wrap; row-gap: 6px; justify-content: flex-end; }
   .btn { padding: 7px 10px; font-size: 11px; }
+  .icon-btn { width: 30px; height: 30px; padding: 6px; }
   .status-bar { display: none; }
   .user-chip-name { max-width: 72px; }
 
-  .results { grid-template-columns: 1fr; gap: 18px; padding: 14px 14px 18px; }
+  .results { grid-template-columns: 1fr; gap: 14px; padding: 14px 14px 18px; margin-top: 14px; }
+  .results-empty { padding: 14px 0 !important; }
+  /* smaller range thumbnail in seats so range-mode seats are shorter (less overlap) */
+  .range-mini-grid { grid-template-columns: repeat(13, 4px); grid-template-rows: repeat(13, 4px); }
+  .range-mini-label { font-size: 9px; }
   .results-table .equity-cell { width: 90px; }
 
   .picker-overlay { padding: 10px; align-items: flex-start; }
@@ -2291,6 +2312,9 @@ body {
   .replayer-body { padding: 10px; }
 
   .builder { padding: 14px 12px 16px; }
+  .builder-stakes { flex-wrap: wrap; }
+  .builder-field { flex: 1 1 40%; min-width: 0; }
+  .builder-field input { width: 100%; min-width: 0; }
   .builder-seat-row { flex-wrap: wrap; row-gap: 6px; }
   .builder-seat-name { min-width: 50px; }
   .builder-seat-stack input { width: 58px; }

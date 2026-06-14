@@ -1,7 +1,7 @@
 // Solver — Setup screen. Compact heads-up felt + configuration panel: board,
 // both ranges/hands, pot, stack, and the discretised bet-size set, then Solve.
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { PlayingCard, EmptyCardSlot, SuitGlyph, CardChip, SUIT_RED } from './Cards.jsx';
+import { PlayingCard, EmptyCardSlot, SuitGlyph, CardChip, SUIT_RED, BoardStrip } from './Cards.jsx';
 import { RangePicker } from './Pickers.jsx';
 import { RangeThumbnail } from './solverBits.jsx';
 import { combosFromKeys, equityMatchup } from './solverEngine.js';
@@ -9,44 +9,36 @@ import { combosFromKeys, equityMatchup } from './solverEngine.js';
 const SUIT_ORDER_S = ['s', 'h', 'c', 'd'];
 const VALUE_ORDER_S = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 
-function CardPickerModal({ title, used, current, onPick, onClear, onClose }) {
-  const usedSet = new Set(used.map((c) => c.v + c.s));
-  const curId = current ? current.v + current.s : null;
+// Deal a whole street at once (flop = 3 cards, turn/river = 1) instead of
+// opening a separate picker per board slot.
+function BoardDealModal({ street, need, used, onConfirm, onCancel }) {
+  const [cards, setCards] = useState([]);
+  function toggle(c) {
+    setCards((prev) => {
+      const i = prev.findIndex((x) => x.v === c.v && x.s === c.s);
+      if (i >= 0) { const n = [...prev]; n.splice(i, 1); return n; }
+      if (prev.length < need) return [...prev, c];
+      return prev;
+    });
+  }
   return (
-    <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="picker" style={{ width: 720 }}>
+    <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="picker" style={{ width: 760 }}>
         <div className="picker-head">
           <div>
-            <div className="picker-title">{title}</div>
-            <div className="picker-sub">Click a card to set this board slot</div>
+            <div className="picker-title">Deal {street}</div>
+            <div className="picker-sub">{cards.length} / {need} card{need === 1 ? '' : 's'} selected</div>
           </div>
-          <div className="picker-selected">
-            {current ? <PlayingCard card={current} size="sm" /> : <EmptyCardSlot size="sm" label="" />}
+          <div className="picker-selected" style={{ display: 'flex', gap: 6 }}>
+            {Array.from({ length: need }).map((_, i) => (cards[i] ? <PlayingCard key={i} card={cards[i]} size="sm" /> : <EmptyCardSlot key={i} size="sm" label="" />))}
           </div>
         </div>
-        <div className="picker-grid">
-          {SUIT_ORDER_S.map((s) => (
-            <div key={s} className="picker-row">
-              {VALUE_ORDER_S.map((v) => {
-                const id = v + s;
-                const isUsed = usedSet.has(id) && id !== curId;
-                const isSel = id === curId;
-                return (
-                  <button key={id} disabled={isUsed}
-                    className={'pcard ' + (isUsed ? 'used ' : '') + (isSel ? 'selected ' : '') + (SUIT_RED[s] ? 'red ' : 'ink ')}
-                    onClick={() => onPick({ v, s })}>
-                    <span className={'pcard-rank' + (v === 'T' ? ' is-ten' : '')}>{v === 'T' ? '10' : v}</span>
-                    <span className="pcard-suit"><SuitGlyph suit={s} size={19} color="currentColor" /></span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        <HandCardGrid used={used} selected={cards} onToggle={toggle} />
         <div className="picker-foot">
-          <button className="btn btn-ghost" onClick={onClear}>Clear slot</button>
+          <button className="btn btn-ghost" onClick={() => setCards([])}>Clear</button>
           <div className="picker-foot-right">
-            <button className="btn btn-ghost" onClick={onClose}>Done</button>
+            <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+            <button className="btn btn-primary" disabled={cards.length !== need} onClick={() => onConfirm(cards)}>Deal {street}</button>
           </div>
         </div>
       </div>
@@ -143,7 +135,7 @@ function SeatHolding({ side }) {
   );
 }
 
-function SetupFelt({ board, oopSide, ipSide, pot, onEditBoard }) {
+function SetupFelt({ board, oopSide, ipSide, pot, onDeal, onClearFrom }) {
   return (
     <div className="sv-felt-card">
       <div className="sv-felt">
@@ -156,11 +148,7 @@ function SetupFelt({ board, oopSide, ipSide, pot, onEditBoard }) {
         <div className="sv-felt-center">
           <div className="sv-pot-pill"><span className="sv-pot-label">POT</span><span className="sv-pot-val">{pot} bb</span></div>
           <div className="sv-board">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <button key={i} className="sv-board-slot" onClick={() => onEditBoard(i)}>
-                {board[i] ? <PlayingCard card={board[i]} size="md" /> : <EmptyCardSlot size="md" label="+" />}
-              </button>
-            ))}
+            <BoardStrip board={board} onDeal={onDeal} onClearFrom={onClearFrom} size="md" />
           </div>
         </div>
         <div className="sv-seat sv-seat-ip">
@@ -320,10 +308,19 @@ function EquityReadout({ oopSide, ipSide, board }) {
 }
 
 export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide, ipSide, setIpSide, onSolve }) {
-  const [boardEdit, setBoardEdit] = useState(null);
+  const [boardDeal, setBoardDeal] = useState(false);
   const [sideEdit, setSideEdit] = useState(null);
-  const usedForBoard = board.filter((c, i) => c && i !== boardEdit);
-  const boardComplete = board.filter(Boolean).length === 5;
+  const filled = board.filter(Boolean).length;
+  const boardComplete = filled === 5;
+  const nextTarget = filled < 3 ? 3 : filled < 4 ? 4 : 5;
+  const dealNeed = nextTarget - filled;
+  const streetLabel = nextTarget === 3 ? 'flop' : nextTarget === 4 ? 'turn' : 'river';
+  function dealBoard(cards) {
+    setBoard((prev) => { const n = [...prev]; let k = prev.filter(Boolean).length; for (const c of cards) { if (k < 5) n[k++] = c; } return n; });
+    setBoardDeal(false);
+  }
+  const onDealBoard = () => setBoardDeal(true);
+  const onClearBoardFrom = (i) => setBoard((prev) => prev.map((c, j) => (j >= i ? null : c)));
   const hasHolding = (side) => side.kind === 'hand' ? (side.cards || []).filter(Boolean).length === 2 : (side.keys || []).length > 0;
   const ready = boardComplete && hasHolding(oopSide) && hasHolding(ipSide);
   const sizeCount = spot.betSizes.length + (spot.allIn ? 1 : 0);
@@ -338,7 +335,7 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
       <div className="sv-setup-grid">
         <div className="sv-setup-left">
           <div className="sv-section-label">Spot preview</div>
-          <SetupFelt board={board} oopSide={oopSide} ipSide={ipSide} pot={spot.pot} onEditBoard={setBoardEdit} />
+          <SetupFelt board={board} oopSide={oopSide} ipSide={ipSide} pot={spot.pot} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} />
           <EquityReadout oopSide={oopSide} ipSide={ipSide} board={board} />
           <div className="sv-scope-note">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -359,11 +356,7 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
                 <button className="sv-clear-board" onClick={() => setBoard([null, null, null, null, null])}>Clear all</button>
               </div>
               <div className="sv-board-row">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <button key={i} className="sv-board-slot sm" onClick={() => setBoardEdit(i)}>
-                    {board[i] ? <PlayingCard card={board[i]} size="sm" /> : <EmptyCardSlot size="sm" label="+" />}
-                  </button>
-                ))}
+                <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size="sm" />
               </div>
             </div>
             <div className="sv-divider" />
@@ -386,11 +379,9 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
           </div>
         </div>
       </div>
-      {boardEdit !== null && (
-        <CardPickerModal title={`Board card ${boardEdit + 1}`} used={usedForBoard} current={board[boardEdit]}
-          onPick={(c) => { setBoard((prev) => { const n = [...prev]; n[boardEdit] = c; return n; }); setBoardEdit(null); }}
-          onClear={() => { setBoard((prev) => { const n = [...prev]; n[boardEdit] = null; return n; }); setBoardEdit(null); }}
-          onClose={() => setBoardEdit(null)} />
+      {boardDeal && (
+        <BoardDealModal street={streetLabel} need={dealNeed} used={board.filter(Boolean)}
+          onConfirm={dealBoard} onCancel={() => setBoardDeal(false)} />
       )}
       {sideEdit && (
         <SidePickerModal label={sideEdit.which === 'OOP' ? 'Out-of-position holding' : 'In-position holding'}

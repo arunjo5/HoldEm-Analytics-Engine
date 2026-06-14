@@ -179,6 +179,7 @@
 }
 .sv-clear-board:hover { color: var(--red); }
 .sv-board-slot.sm:hover { transform: translateY(-1px); }
+.sv-deal-btn { width: 100%; margin-top: 8px; justify-content: center; border-style: dashed; }
 
 /* range rows */
 .sv-range-row { display: flex; gap: 14px; align-items: center; }

@@ -18,10 +18,10 @@ function restrictFor(side) {
   return null;
 }
 
-function Header({ onExit, theme, onToggleTheme }) {
+function Header({ onBack, theme, onToggleTheme }) {
   return (
     <div className="sv-header">
-      <button className="btn btn-ghost sv-back" onClick={onExit}>
+      <button className="btn btn-ghost sv-back" onClick={onBack}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
         Back
       </button>
@@ -110,7 +110,7 @@ export function SolverView({ onExit, theme, onToggleTheme }) {
 
   return (
     <div className="sv-app">
-      <Header onExit={onExit} theme={theme} onToggleTheme={onToggleTheme} />
+      <Header onBack={() => { if (stage === 'setup') onExit(); else setStage('setup'); }} theme={theme} onToggleTheme={onToggleTheme} />
       <div className="sv-body">
         {error && <div className="sv-error-banner">{error}</div>}
         {stage === 'setup' && (

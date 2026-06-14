@@ -30,7 +30,7 @@ const solveBtn = () => screen.getByRole('button', { name: 'Solve' });
 const warn = () => document.querySelector('.sv-solve-warn');
 const treeSummary = () => document.querySelector('.sv-tree-summary').textContent;
 const sideRow = (i) => document.querySelectorAll('.sv-range-row')[i];
-const boardSlot = (i) => document.querySelectorAll('.sv-board-slot.sm')[i];
+const boardSlot = (i) => document.querySelectorAll('.sv-board-row .board-strip-btn')[i]; // 0=flop 1=turn 2=river
 const sizeVals = () => Array.from(document.querySelectorAll('.sv-size-val')).map((b) => b.textContent);
 const openChipEditor = (label) => {
   fireEvent.click(Array.from(document.querySelectorAll('.sv-size-val')).find((b) => b.textContent === label));
@@ -65,7 +65,7 @@ describe('Solve ready-gating', () => {
     expect(onSolve).toHaveBeenCalledTimes(1);
   });
 
-  it('board Clear all empties the slots and re-disables Solve', () => {
+  it('board Clear all empties the strip and re-disables Solve', () => {
     render(<Harness board={FULL_BOARD} oopSide={{ kind: 'range', keys: ['AA'] }} ipSide={{ kind: 'range', keys: ['AA'] }} />);
     expect(solveBtn()).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
@@ -83,23 +83,46 @@ describe('Solve ready-gating', () => {
   });
 });
 
-describe('board CardPickerModal', () => {
-  it('blocks cards used on other slots but not the slot being edited', () => {
-    render(<Harness board={[c('A', 's'), c('K', 'd'), null, null, null]} />);
-    fireEvent.click(boardSlot(2));
+describe('board deal flow', () => {
+  const dealConfirm = () => document.querySelector('.picker-foot .btn-primary');
+
+  it('the flop button deals 3 cards at once; confirm gates until 3 are picked', () => {
+    render(<Harness />);
+    fireEvent.click(boardSlot(0)); // flop button
+    fireEvent.click(pcard('A', 's'));
+    fireEvent.click(pcard('K', 'd'));
+    expect(pcard('A', 's').className).toContain('selected');
+    expect(dealConfirm()).toBeDisabled();
+    fireEvent.click(pcard('Q', 'h'));
+    expect(dealConfirm()).toBeEnabled();
+    fireEvent.click(dealConfirm());
+    expect(document.querySelector('.picker-overlay')).toBeNull();
+    expect(boardSlot(0).textContent).toBe('AKQ'); // flop button shows the 3 cards
+  });
+
+  it('turn and river slots are disabled until the prior street is dealt', () => {
+    render(<Harness />);
+    expect(boardSlot(1)).toBeDisabled(); // turn locked with no flop
+    expect(boardSlot(2)).toBeDisabled(); // river locked
+  });
+
+  it('the turn deal blocks cards already on the board', () => {
+    render(<Harness board={[c('A', 's'), c('K', 'd'), c('Q', 'h'), null, null]} />);
+    fireEvent.click(boardSlot(1)); // turn button
     expect(pcard('A', 's')).toBeDisabled();
     expect(pcard('A', 's').className).toContain('used');
-    expect(pcard('K', 'd')).toBeDisabled();
-    fireEvent.click(pcard('Q', 'h'));
-    expect(document.querySelector('.picker-overlay')).toBeNull();
-    expect(boardSlot(2).textContent).toBe('Q');
+    fireEvent.click(pcard('2', 'c'));
+    fireEvent.click(dealConfirm());
+    expect(boardSlot(1).textContent).toBe('2');
+  });
 
+  it('clicking the flop clears the whole board', () => {
+    render(<Harness board={FULL_BOARD} />);
+    expect(boardSlot(0).textContent).toBe('279'); // FULL_BOARD flop = 2,7,9
     fireEvent.click(boardSlot(0));
-    expect(pcard('A', 's')).toBeEnabled();
-    expect(pcard('A', 's').className).toContain('selected');
-    fireEvent.click(screen.getByRole('button', { name: 'Clear slot' }));
-    expect(document.querySelector('.picker-overlay')).toBeNull();
     expect(boardSlot(0).textContent).toBe('+');
+    expect(boardSlot(1).textContent).toBe('+');
+    expect(boardSlot(2).textContent).toBe('+');
   });
 });
 
