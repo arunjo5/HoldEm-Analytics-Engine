@@ -1,6 +1,6 @@
 # PokerLab — Frontend
 
-Texas Hold'em analytics: Monte Carlo equity, range analysis, pot odds/MDF, and a hand replayer.
+Texas Hold'em analytics: Monte Carlo equity, range analysis, pot odds/MDF, a heads-up river CFR solver, and a hand replayer.
 
 ## Stack
 
@@ -40,6 +40,13 @@ frontend/
     ├── equityWorker.js     runs the simulation off the main thread
     ├── replayerEngine.js   betting/positions/frame logic
     ├── Replayer.jsx        hand replayer + step-through playback
+    ├── solverEngine.js     heads-up river CFR+ solver
+    ├── solverWorker.js     runs the solve off the main thread
+    ├── SolverView.jsx      solver setup -> solving -> results flow
+    ├── SolverSetup.jsx     board/range/bet-size configuration
+    ├── SolverResults.jsx   strategy grid + exploitability readout
+    ├── solverBits.jsx      shared solver UI (range thumbnail, legend)
+    ├── solver.css          solver styles
     ├── pokernowImport.js   parse PokerNow exports into replayable hands
     ├── scenario.js         scenario <-> URL state
     ├── shareCodec.js       compact share-link encoding (lz-string)

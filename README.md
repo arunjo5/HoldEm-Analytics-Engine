@@ -1,10 +1,13 @@
 ## PokerLab
 
-#### Texas Hold'Em analytics platform for hand/range equity, pot odds/MDF, and hand-history replay.
+#### Texas Hold'Em analytics platform with hand/range equity, hand-history replay, and a CFR solver.
 
-<img width="1200" alt="PokerLab equity calculator" src="pokerlab.png" />
+<p>
+  <img src="pokerlab-calculator.png" width="49%" alt="PokerLab equity calculator" />
+  <img src="pokerlab-solver.png" width="49%" alt="PokerLab heads-up river solver" />
+</p>
 
-PokerLab lets you deal hole cards, assign ranges, and set the board, then computes each player’s equity using a Monte Carlo simulation. It also includes a side panel for calculating pot odds and MDF in the current spot. You can import PokerNow logs into the replayer, share exact board states or replays, and review past hands from your profile page.
+PokerLab lets you deal hole cards, assign ranges, and set the board, then computes each player’s equity using a Monte Carlo simulation. It also includes a side panel for calculating pot odds and MDF in the current spot. A heads-up river solver finds the GTO strategy for a single river decision between two ranges using CFR. You can import PokerNow logs into the replayer, share exact board states or replays, and review past hands from your profile page.
 
 ## Architecture
 
@@ -20,8 +23,9 @@ PokerLab lets you deal hole cards, assign ranges, and set the board, then comput
 +----------------------------------------------------------+
 |              Frontend  ·  Vite + React SPA               |
 |                                                          |
-|     Equity Calculator · Hand Replayer · Share links      |
-|      Equity Web Worker · Monte Carlo (client-side)       |
+|     Equity Calculator · Hand Replayer · River Solver     |
+|      Share links · PokerNow import · saved history       |
+|      Web Workers · Monte Carlo + CFR (client-side)       |
 +----------------------------------------------------------+
                              |
                 /api/*  ·  same-origin proxy

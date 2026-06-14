@@ -14,7 +14,7 @@ npm install
 
 ## 2. Environment variables
 
-Create `.env.local`:
+Create `.env`:
 
 ```env
 # Database
@@ -40,12 +40,12 @@ Notes:
 3. Add authorized redirect URIs:
    - `http://localhost:3000/api/auth/callback/google` (dev)
    - `https://yourdomain.com/api/auth/callback/google` (prod)
-4. Copy the Client ID and Secret into `.env.local`.
+4. Copy the Client ID and Secret into `.env`.
 
 ## 4. Database
 
 ```bash
-npx prisma migrate dev    # apply the schema (prisma generate runs on install)
+npx prisma db push        # apply the schema (prisma generate runs on install)
 ```
 
 ## 5. Run
@@ -70,6 +70,6 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Security
 
-- Never commit `.env.local`.
+- Never commit `.env`.
 - Use strong secrets in production and rotate OAuth credentials periodically.
 - API routes are rate-limited (Upstash Redis, with an in-memory fallback).

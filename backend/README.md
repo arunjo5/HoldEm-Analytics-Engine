@@ -1,6 +1,6 @@
 # PokerLab — Backend
 
-Auth and persistence for PokerLab. Equity is computed client-side in the frontend; this service handles accounts, the saved-hand API, and rate limiting.
+Auth and persistence for PokerLab. Equity is computed client-side in the frontend; this service handles accounts, the saved-hand API (LRU-capped per user), and rate limiting.
 
 ## Stack
 
@@ -15,7 +15,7 @@ Auth and persistence for PokerLab. Equity is computed client-side in the fronten
 npm install
 ```
 
-Create `.env.local`:
+Create `.env`:
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/pokerlab"
@@ -30,7 +30,7 @@ GOOGLE_CLIENT_SECRET=""
 Then:
 
 ```bash
-npx prisma migrate dev    # create the schema
+npx prisma db push        # create the schema
 npm run dev               # http://localhost:3000
 ```
 
@@ -50,8 +50,8 @@ src/
 ├── app/
 │   ├── api/auth/[...nextauth]/   NextAuth handlers
 │   ├── api/auth/signup/          username/password signup
-│   ├── api/searches/             saved-hand list + create
-│   ├── api/searches/[id]/        favorite or delete one
+│   ├── api/searches/             saved-hand list + create (LRU-capped)
+│   ├── api/searches/[id]/        favorite, rename, touch, or delete one
 │   ├── layout.tsx · page.tsx · providers.tsx · theme.ts
 │   └── globals.css
 ├── components/                   Header, auth (SignInButton, UserMenu), ColorModeToggle
@@ -67,8 +67,8 @@ src/
 
 - `POST /api/auth/signup` — create a username/password account
 - `GET /api/searches` — list saved hands
-- `POST /api/searches` — save a hand
-- `PATCH /api/searches/[id]` — toggle favorite
+- `POST /api/searches` — save a hand (prunes least-recently-used non-favorites past the per-user cap)
+- `PATCH /api/searches/[id]` — toggle favorite, rename, or touch (mark recently used)
 - `DELETE /api/searches/[id]` — delete a hand
 
 ## License
