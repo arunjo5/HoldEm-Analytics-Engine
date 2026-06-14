@@ -42,6 +42,7 @@ export function SuitGlyph({ suit, size, color }) {
 const CARD_SIZES = {
   xs: { w: 24, h: 32, rank: 13, suit: 13, pad: 2, radius: 3 },
   sm: { w: 32, h: 44, rank: 16, suit: 15, pad: 3, radius: 4 },
+  bd: { w: 42, h: 58, rank: 20, suit: 19, pad: 4, radius: 5 }, // compact board cards
   md: { w: 50, h: 68, rank: 24, suit: 22, pad: 4, radius: 6 },
   // replayer: a touch larger than md / lg
   mdr: { w: 55, h: 75, rank: 26, suit: 24, pad: 4, radius: 6 },
@@ -105,6 +106,7 @@ export function PlayingCard({ card, size = 'md', faded = false, dim = false }) {
 const BACK_SIZES = {
   xs: { w: 24, h: 32, radius: 3 },
   sm: { w: 32, h: 44, radius: 4 },
+  bd: { w: 42, h: 58, radius: 5 },
   md: { w: 50, h: 68, radius: 6 },
   mdr: { w: 55, h: 75, radius: 6 },
   lg: { w: 64, h: 88, radius: 8 },
@@ -130,6 +132,7 @@ export function CardBack({ size = 'md' }) {
 
 const SLOT_SIZES = {
   sm: { w: 32, h: 44, radius: 4, font: 16 },
+  bd: { w: 42, h: 58, radius: 5, font: 18 },
   md: { w: 50, h: 68, radius: 6, font: 20 },
   lg: { w: 64, h: 88, radius: 8, font: 24 },
 };
@@ -155,6 +158,33 @@ export function EmptyCardSlot({ size = 'md', label = '+', active = false }) {
     >
       {label}
     </div>
+  );
+}
+
+// Board entry as flop / turn / river: the flop is a single button that deals
+// all 3 cards at once; turn and river are single slots. Clicking a dealt
+// street clears it and every later card. onDeal(street) opens the parent's
+// card picker; the parent owns the modal so calc and solver can differ.
+export function BoardStrip({ board, onDeal, onClearFrom, size = 'sm' }) {
+  const cards = (board || []).filter(Boolean);
+  const n = cards.length;
+  return (
+    <>
+      <button type="button" className="board-strip-btn" title={n >= 3 ? 'Clear board' : 'Deal flop'}
+        onClick={() => (n >= 3 ? onClearFrom(0) : onDeal('flop'))}>
+        {n >= 3
+          ? <span className="board-flop-cards"><PlayingCard card={cards[0]} size={size} /><PlayingCard card={cards[1]} size={size} /><PlayingCard card={cards[2]} size={size} /></span>
+          : <EmptyCardSlot size={size} label="+" />}
+      </button>
+      <button type="button" className="board-strip-btn" disabled={n < 3} title={n >= 4 ? 'Clear turn' : 'Deal turn'}
+        onClick={() => (n >= 4 ? onClearFrom(3) : onDeal('turn'))}>
+        {n >= 4 ? <PlayingCard card={cards[3]} size={size} /> : <EmptyCardSlot size={size} label="+" />}
+      </button>
+      <button type="button" className="board-strip-btn" disabled={n < 4} title={n >= 5 ? 'Clear river' : 'Deal river'}
+        onClick={() => (n >= 5 ? onClearFrom(4) : onDeal('river'))}>
+        {n >= 5 ? <PlayingCard card={cards[4]} size={size} /> : <EmptyCardSlot size={size} label="+" />}
+      </button>
+    </>
   );
 }
 

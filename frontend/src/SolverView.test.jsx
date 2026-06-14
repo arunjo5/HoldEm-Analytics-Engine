@@ -19,11 +19,15 @@ function clickPickerCard(v, s) {
   fireEvent.click(grid.querySelectorAll('.pcard')[SUIT_ROWS.indexOf(s) * 13 + VALS.indexOf(v)]);
 }
 
+function dealStreet(slotIdx, cards) {
+  fireEvent.click(document.querySelectorAll('.sv-board-row .board-strip-btn')[slotIdx]);
+  cards.forEach((card) => clickPickerCard(card.v, card.s));
+  fireEvent.click(document.querySelector('.picker-foot .btn-primary'));
+}
 function setBoard() {
-  BOARD.forEach((card, i) => {
-    fireEvent.click(document.querySelectorAll('.sv-board-slot.sm')[i]);
-    clickPickerCard(card.v, card.s);
-  });
+  dealStreet(0, BOARD.slice(0, 3)); // flop button
+  dealStreet(1, BOARD.slice(3, 4)); // turn
+  dealStreet(2, BOARD.slice(4, 5)); // river
 }
 
 function setOopHandAhKh() {

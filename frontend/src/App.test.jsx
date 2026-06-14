@@ -113,6 +113,12 @@ function pushBatch(w) {
 
 const findChip = () => screen.findByRole('button', { name: /Arun/ });
 
+function dealFlop() {
+  fireEvent.click(document.querySelectorAll('.board .board-strip-btn')[0]);
+  ['A of s', 'K of d', 'Q of h'].forEach((l) => fireEvent.click(screen.getByLabelText(l)));
+  fireEvent.click(document.querySelector('.picker-foot .btn-primary'));
+}
+
 async function openDrawer() {
   fireEvent.click(await findChip());
   fireEvent.click(screen.getByText('Hand history'));
@@ -144,9 +150,9 @@ afterEach(() => {
 describe('App (calculator)', () => {
   it('renders the toolbar and the pot-odds panel', () => {
     renderApp();
-    expect(screen.getByRole('button', { name: /clear all/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /clear all/i })).toBeNull(); // hidden until there's an entry
     expect(screen.getByRole('button', { name: /replayer/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /upload log/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /solver/i })).toBeInTheDocument();
     expect(screen.getByText('Pot odds')).toBeInTheDocument();
     expect(screen.getAllByPlaceholderText('0').length).toBeGreaterThanOrEqual(2);
   });
@@ -157,6 +163,28 @@ describe('App (calculator)', () => {
     fireEvent.change(inputs[0], { target: { value: '100' } });
     fireEvent.change(inputs[1], { target: { value: '50' } });
     expect(screen.getByText('25.0%')).toBeInTheDocument();
+  });
+
+  it('deals the board flop as one button, with turn and river locked until prior streets', () => {
+    renderApp();
+    const strip = () => document.querySelectorAll('.board .board-strip-btn');
+    expect(strip()).toHaveLength(3);
+    expect(strip()[0].title).toBe('Deal flop');
+    expect(strip()[1]).toBeDisabled();
+    expect(strip()[2]).toBeDisabled();
+    dealFlop();
+    expect(document.querySelector('.picker-overlay')).toBeNull();
+    expect(strip()[0].querySelectorAll('.board-flop-cards > *')).toHaveLength(3);
+    expect(strip()[1]).not.toBeDisabled();
+  });
+
+  it('Clear all is hidden until there is an entry, and disappears again after clearing', () => {
+    renderApp();
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull();
+    dealFlop();
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull();
   });
 });
 
@@ -368,6 +396,7 @@ describe('auto-save commitToHistory + page-exit', () => {
     mockFetch({ '/api/auth/session': ok({ user: USER }) });
     renderApp();
     await findChip();
+    dealFlop(); // a board-only entry surfaces Clear all but makes no savable snapshot (no players)
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     expect(callsTo('/api/searches', 'POST')).toHaveLength(0);
   });
@@ -462,9 +491,9 @@ describe('view switching and toolbar gating', () => {
     expect(screen.getByText('Spot configuration')).toBeInTheDocument();
     expect(document.querySelector('.sv-mode-badge').textContent).toContain('Solver');
     expect(screen.queryByRole('button', { name: 'Replayer' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Upload log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Solver' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByRole('button', { name: 'Upload log' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replayer' })).toBeInTheDocument();
   });
 
   it('Replayer commits the pending hand before taking over, and exits back to calc', async () => {
@@ -480,26 +509,25 @@ describe('view switching and toolbar gating', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Replayer' }));
     expect(callsTo('/api/searches', 'POST')).toHaveLength(1);
     expect(screen.getByText('Hand Replayer')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Upload log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull();
     fireEvent.click(document.querySelector('.replayer-back'));
-    expect(screen.getByRole('button', { name: 'Upload log' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
   });
 
-  it('signed out: no Favorite button, and Upload log opens the auth modal instead', async () => {
+  it('signed out: no Favorite button, and no upload entry (it lives in the account menu)', async () => {
     renderApp();
     await screen.findByRole('button', { name: /sign in/i });
     expect(screen.queryByRole('button', { name: 'Favorite' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Upload log' }));
-    expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Upload PokerNow log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /upload log|import pokernow/i })).toBeNull();
   });
 
-  it('signed in: Favorite renders and Upload log opens the upload modal', async () => {
+  it('signed in: Favorite renders and the account menu Import opens the upload modal', async () => {
     mockFetch({ '/api/auth/session': ok({ user: USER }) });
     renderApp();
-    await findChip();
+    const chip = await findChip();
     expect(screen.getByRole('button', { name: 'Favorite' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Upload log' }));
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole('button', { name: 'Import PokerNow log' }));
     expect(screen.getByRole('dialog', { name: 'Upload PokerNow log' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
   });
@@ -532,14 +560,15 @@ describe('UserChip', () => {
     expect(img).toHaveAttribute('src', 'http://x/a.png');
   });
 
-  it('opens a menu with the account header and the three items', async () => {
+  it('opens a menu with the account header and the four items', async () => {
     mockFetch({ '/api/auth/session': ok({ user: USER }) });
     renderApp();
     fireEvent.click(await findChip());
     const menu = document.querySelector('.user-menu');
     expect(within(menu).getByText('Arun')).toBeInTheDocument();
     expect(within(menu).getByText('a@b.c')).toBeInTheDocument();
-    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(3);
+    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(4);
+    expect(within(menu).getByText('Import PokerNow log')).toBeInTheDocument();
     expect(within(menu).getByText('Hand history')).toBeInTheDocument();
     expect(within(menu).getByText('Share')).toBeInTheDocument();
     expect(within(menu).getByText('Sign out')).toBeInTheDocument();
