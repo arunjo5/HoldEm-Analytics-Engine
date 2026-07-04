@@ -1038,8 +1038,8 @@ function StageScaler({ children }) {
   const S = compact ? CALC_STAGE_COMPACT : CALC_STAGE;
   return (
     <div ref={ref} className="stage-scaler" style={{
-      width: S.w * scale,
-      height: S.h * scale,
+      width: Math.floor(S.w * scale),
+      height: Math.floor(S.h * scale),
     }}>
       <div className="stage-inner" style={{
         width: S.w,

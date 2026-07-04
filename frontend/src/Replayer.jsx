@@ -24,11 +24,10 @@ const ALL_RANGE_KEYS = (() => {
 // Seats around the felt with EQUAL ARC LENGTH spacing (same approach as the
 // main calculator table) so large plates never bunch up / overlap. Seat 0
 // (BTN) sits at the bottom, near the viewer.
-function replaySeatPositions(n, compact) {
+function replaySeatPositions(n, compact, cfg) {
   const cx = 50, cy = 50;
-  // desktop: same ellipse as the main calculator table; compact: portrait phone stage
-  const rx_pct = compact ? 36 : 44, ry_pct = compact ? 42 : 35;
-  const STAGE_W = compact ? 460 : 1080, STAGE_H = compact ? 640 : 600;
+  const rx_pct = cfg ? cfg.rx : compact ? 36 : 44, ry_pct = cfg ? cfg.ry : compact ? 42 : 35;
+  const STAGE_W = cfg ? cfg.w : compact ? 460 : 1080, STAGE_H = cfg ? cfg.h : compact ? 640 : 600;
   const rxPx = (rx_pct / 100) * STAGE_W;
   const ryPx = (ry_pct / 100) * STAGE_H;
   const SAMPLES = 4000;
@@ -158,7 +157,7 @@ function ReplayStage({ children }) {
   const S = compact ? COMPACT_STAGE : DESKTOP_STAGE;
   const H = S.feltH + S.padY * 2;
   return (
-    <div ref={ref} className="replay-stage-scaler" style={{ width: S.w * scale, height: H * scale }}>
+    <div ref={ref} className="replay-stage-scaler" style={{ width: Math.floor(S.w * scale), height: Math.floor(H * scale) }}>
       <div className="replay-stage-inner" style={{ width: S.w, height: H, transform: `scale(${scale})` }}>
         {children(compact, S)}
       </div>
@@ -359,6 +358,84 @@ function CardSelectOverlay({ title, maxCards, usedCards, onConfirm, onClose, onC
   );
 }
 
+// Live felt preview for the hand builder.
+const BT_STAGE = { w: 660, h: 400, rx: 40, ry: 36 };
+const BT_STAGE_COMPACT = { w: 400, h: 470, rx: 36, ry: 40 };
+
+function BuilderTable({ setup, board, live, actingSeat, street, onSeatClick }) {
+  const ref = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    function update() {
+      const el = ref.current;
+      if (!el || !el.parentElement) return;
+      const w = el.parentElement.clientWidth;
+      const c = w > 0 && w < 520;
+      const S = c ? BT_STAGE_COMPACT : BT_STAGE;
+      const s = Math.min(w / S.w, 1);
+      setCompact(c);
+      setScale(s > 0 ? s : 1);
+    }
+    update();
+    const ro = new ResizeObserver(update);
+    if (ref.current && ref.current.parentElement) ro.observe(ref.current.parentElement);
+    window.addEventListener('resize', update);
+    return () => { ro.disconnect(); window.removeEventListener('resize', update); };
+  }, []);
+  const S = compact ? BT_STAGE_COMPACT : BT_STAGE;
+  const n = setup.seats.length;
+  const positions = useMemo(
+    () => replaySeatPositions(n, compact, { rx: S.rx, ry: S.ry, w: S.w, h: S.h }),
+    [n, compact, S.rx, S.ry, S.w, S.h]
+  );
+  return (
+    <div ref={ref} className="bt-scaler" style={{ width: Math.floor(S.w * scale), height: Math.floor(S.h * scale) }}>
+      <div className="bt-inner" style={{ width: S.w, height: S.h, transform: `scale(${scale})` }}>
+        <div className={'bt-table' + (compact ? ' compact' : '')} style={{ width: S.w, height: S.h }}>
+          <div className="bt-rim" />
+          <div className="bt-felt" />
+          <div className="bt-center">
+            <div className="bt-pot"><span>POT</span><b>{live ? fmt(live.pot) : 0}</b></div>
+            {board.length > 0 && (
+              <div className="bt-board">{board.map((c, i) => <PlayingCard key={i} card={c} size="xs" />)}</div>
+            )}
+            <div className="bt-street">{ReplayEngine.STREET_NAMES[street]}</div>
+          </div>
+          {positions.map((pos, i) => {
+            const seat = setup.seats[i];
+            const folded = live ? live.folded[i] : false;
+            const allin = live ? live.allin[i] : false;
+            const stack = live ? live.stacks[i] : seat.stack;
+            const bet = live ? live.streetContrib[i] : 0;
+            const known = seat.cards && seat.cards.length === 2;
+            return (
+              <div key={i}
+                className={'bt-seat' + (folded ? ' folded' : '') + (actingSeat === i ? ' acting' : '')}
+                style={{ left: pos.x + '%', top: pos.y + '%' }}>
+                <button type="button" className="bt-plate" disabled={!onSeatClick}
+                  onClick={onSeatClick ? () => onSeatClick(i) : undefined}
+                  title={onSeatClick ? 'Set hole cards' : undefined}>
+                  <span className="bt-cards">
+                    {known
+                      ? seat.cards.map((c, k) => <PlayingCard key={k} card={c} size="xs" dim={folded} />)
+                      : <><CardBack size="xs" /><CardBack size="xs" /></>}
+                  </span>
+                  <span className="bt-info">
+                    <span className="bt-top"><span className="bt-pos">{seat.pos}</span><span className="bt-name">{seat.name || `P${i + 1}`}</span></span>
+                    <span className="bt-stack">{allin && !folded ? 'ALL-IN' : fmt(stack)}</span>
+                  </span>
+                </button>
+                {bet > 0 && !folded && <span className="bt-bet">{fmt(bet)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Builder live-state: process actions street by street up to currentStreet.
 function builderState(setup, actions, board, currentStreet) {
   const st = ReplayEngine.initState(setup);
@@ -448,6 +525,12 @@ function HandBuilder({ onComplete, onCancel }) {
     catch (e) { return null; }
   }, [phase, setup, actions, board, currentStreet]);
 
+  const liveSetup = useMemo(() => {
+    if (phase !== 'setup') return null;
+    try { return ReplayEngine.initState(setup); }
+    catch { return null; }
+  }, [phase, setup]);
+
   const opts = live && !live.handOver ? ReplayEngine.legalOptions(live, setup) : null;
   const streetDone = live && (live.handOver || live.nextSeat == null);
   const handDone = live && (live.handOver || (currentStreet === 3 && live.nextSeat == null));
@@ -508,6 +591,11 @@ function HandBuilder({ onComplete, onCancel }) {
   // render
   if (phase === 'setup') {
     return (
+      <div className="builder-layout">
+      <div className="builder-table-col">
+        <BuilderTable setup={setup} board={[]} live={liveSetup} actingSeat={null} street={0}
+          onSeatClick={(i) => setCardTarget(i)} />
+      </div>
       <div className="builder">
         <div className="builder-head">
           <div>
@@ -588,11 +676,16 @@ function HandBuilder({ onComplete, onCancel }) {
           />
         )}
       </div>
+      </div>
     );
   }
 
   // phase === 'actions'
   return (
+    <div className="builder-layout">
+    <div className="builder-table-col">
+      <BuilderTable setup={setup} board={board} live={live} actingSeat={opts ? opts.seat : null} street={currentStreet} />
+    </div>
     <div className="builder builder-actions">
       <div className="builder-head">
         <div>
@@ -695,6 +788,7 @@ function HandBuilder({ onComplete, onCancel }) {
           onClose={() => setDealing(false)}
         />
       )}
+    </div>
     </div>
   );
 }
