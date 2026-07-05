@@ -341,7 +341,7 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v4h1" />
             </svg>
-            <div><strong>Heads-up river spots only.</strong> Solver runs a single river decision between two holdings — it is not a general multi-street GTO solver.</div>
+            <div><strong>Heads-up river spots only.</strong> This is not a general multi-street GTO solver.</div>
           </div>
         </div>
         <div className="sv-setup-right">
