@@ -40,7 +40,7 @@ function buildCombos(rangeKeys, board, restrictIds) {
       const c0 = cardToId(cc[0]), c1 = cardToId(cc[1]);
       const score = evaluate7(c0, c1, bIds[0], bIds[1], bIds[2], bIds[3], bIds[4]);
       out.push({
-        id: a + b, hkey, cards: cc, score, cat: score >>> 20,
+        id: a + b, hkey, cards: cc, score, cat: score >>> 20, c0, c1,
         lo: ((c0 < 32 ? (1 << c0) : 0) | (c1 < 32 ? (1 << c1) : 0)) >>> 0,
         hi: ((c0 >= 32 ? (1 << (c0 - 32)) : 0) | (c1 >= 32 ? (1 << (c1 - 32)) : 0)) >>> 0,
       });
@@ -130,9 +130,14 @@ function initNodes(node, nOOP, nIP) {
   if (node.terminal) return;
   const N = node.player === 0 ? nOOP : nIP;
   const A = node.actions.length;
+  const maxN = Math.max(nOOP, nIP);
   node.N = N; node.A = A;
   node.regret = new Float64Array(N * A);
   node.strat = new Float64Array(N * A);  // accumulated (linear-weighted) strategy
+  // scratch reused across all iterations — cfr/evalValue never run concurrently
+  node.sBuf = new Float64Array(N * A);
+  node.reachBuf = Array.from({ length: A }, () => new Float64Array(N));
+  node.cfvBuf = Array.from({ length: A }, () => new Float64Array(maxN));
   for (const ch of node.children) initNodes(ch, nOOP, nIP);
 }
 
@@ -156,7 +161,26 @@ export function solve(board, oopKeys, ipKeys, spot, opts = {}, onProgress) {
   const sc = [new Int32Array(nO), new Int32Array(nI)];
   const lo = [new Uint32Array(nO), new Uint32Array(nI)];
   const hi = [new Uint32Array(nO), new Uint32Array(nI)];
-  for (let p = 0; p < 2; p++) for (let i = 0; i < sides[p].length; i++) { sc[p][i] = sides[p][i].score; lo[p][i] = sides[p][i].lo; hi[p][i] = sides[p][i].hi; }
+  const cA = [new Int32Array(nO), new Int32Array(nI)];
+  const cB = [new Int32Array(nO), new Int32Array(nI)];
+  for (let p = 0; p < 2; p++) for (let i = 0; i < sides[p].length; i++) {
+    const cb = sides[p][i];
+    sc[p][i] = cb.score; lo[p][i] = cb.lo; hi[p][i] = cb.hi; cA[p][i] = cb.c0; cB[p][i] = cb.c1;
+  }
+  // river scores never change, so terminals are linear sweeps in score order;
+  // blockers correct in O(1) via per-card cumulative sums + an exact-pair lookup
+  const ord = [null, null];
+  const pairIdx = [null, null];
+  for (let p = 0; p < 2; p++) {
+    const n = sides[p].length, s = sc[p];
+    const o = Int32Array.from({ length: n }, (_, i) => i);
+    o.sort((a, b) => s[a] - s[b]);
+    ord[p] = o;
+    const m = new Int32Array(52 * 52).fill(-1);
+    for (let i = 0; i < n; i++) { m[cA[p][i] * 52 + cB[p][i]] = i; m[cB[p][i] * 52 + cA[p][i]] = i; }
+    pairIdx[p] = m;
+  }
+  const cardTot = new Float64Array(52), cardLow = new Float64Array(52), cardLeq = new Float64Array(52);
 
   const tree = buildTree(spot);
   initNodes(tree.root, nO, nI);
@@ -170,121 +194,179 @@ export function solve(board, oopKeys, ipKeys, spot, opts = {}, onProgress) {
 
   // showdown counterfactual values for traverser p's combos, given opp reach.
   function showdownCFV(p, terminal, reachOpp, out) {
-    const me = p, opp = 1 - p, msc = sc[me], olo = lo[opp], ohi = hi[opp], osc = sc[opp];
-    const mlo = lo[me], mhi = hi[me], no = sides[opp].length, nm = sides[me].length;
+    const me = p, opp = 1 - p, msc = sc[me], osc = sc[opp];
+    const no = sides[opp].length, nm = sides[me].length;
+    const ordM = ord[me], ordO = ord[opp], oA = cA[opp], oB = cB[opp], oPair = pairIdx[opp];
     const inv = terminal.inv, pot = terminal.pot;
     const winPay = pot - inv[me], tiePay = pot / 2 - inv[me], losePay = -inv[me];
-    for (let i = 0; i < nm; i++) {
-      const si = msc[i], pl = mlo[i], ph = mhi[i];
-      let w = 0, t = 0, l = 0;
-      for (let j = 0; j < no; j++) {
-        if ((pl & olo[j]) || (ph & ohi[j])) continue;
-        const rj = reachOpp[j]; if (rj === 0) continue;
-        const sj = osc[j];
-        if (si > sj) w += rj; else if (si === sj) t += rj; else l += rj;
+    cardTot.fill(0);
+    let total = 0;
+    for (let j = 0; j < no; j++) {
+      const rj = reachOpp[j];
+      if (rj !== 0) { total += rj; cardTot[oA[j]] += rj; cardTot[oB[j]] += rj; }
+    }
+    if (total === 0) { out.fill(0, 0, nm); return; }
+    cardLow.fill(0); cardLeq.fill(0);
+    // sweep opp combos by score, tracking total and per-card reach below (low) and at (leq) si
+    let jLow = 0, jLeq = 0, sumLow = 0, sumLeq = 0, curScore = -1;
+    for (let k = 0; k < nm; k++) {
+      const i = ordM[k], si = msc[i];
+      if (si !== curScore) {
+        while (jLow < no) {
+          const j = ordO[jLow];
+          if (osc[j] >= si) break;
+          const rj = reachOpp[j];
+          if (rj !== 0) { sumLow += rj; cardLow[oA[j]] += rj; cardLow[oB[j]] += rj; }
+          jLow++;
+        }
+        while (jLeq < no) {
+          const j = ordO[jLeq];
+          if (osc[j] > si) break;
+          const rj = reachOpp[j];
+          if (rj !== 0) { sumLeq += rj; cardLeq[oA[j]] += rj; cardLeq[oB[j]] += rj; }
+          jLeq++;
+        }
+        curScore = si;
       }
+      const a = cA[me][i], b = cB[me][i];
+      // the (a,b) opp combo sits in both per-card sums — put back one count
+      let pw = 0, pt = 0, pl = 0;
+      const pj = oPair[a * 52 + b];
+      if (pj >= 0) {
+        const rj = reachOpp[pj];
+        if (rj !== 0) { const sj = osc[pj]; if (sj < si) pw = rj; else if (sj === si) pt = rj; else pl = rj; }
+      }
+      const lowShare = cardLow[a] + cardLow[b] - pw;
+      const leqShare = cardLeq[a] + cardLeq[b] - pw - pt;
+      const totShare = cardTot[a] + cardTot[b] - pw - pt - pl;
+      const w = sumLow - lowShare;
+      const t = (sumLeq - sumLow) - (leqShare - lowShare);
+      const l = (total - sumLeq) - (totShare - leqShare);
       out[i] = winPay * w + tiePay * t + losePay * l;
     }
   }
   function foldCFV(p, terminal, reachOpp, out) {
-    const me = p, opp = 1 - p, olo = lo[opp], ohi = hi[opp], mlo = lo[me], mhi = hi[me];
-    const no = sides[opp].length, nm = sides[me].length, inv = terminal.inv, pot = terminal.pot;
+    const me = p, opp = 1 - p;
+    const no = sides[opp].length, nm = sides[me].length;
+    const oA = cA[opp], oB = cB[opp], oPair = pairIdx[opp];
+    const inv = terminal.inv, pot = terminal.pot;
     const pay = terminal.winner === me ? (pot - inv[me]) : (-inv[me]);
+    cardTot.fill(0);
+    let total = 0;
+    for (let j = 0; j < no; j++) {
+      const rj = reachOpp[j];
+      if (rj !== 0) { total += rj; cardTot[oA[j]] += rj; cardTot[oB[j]] += rj; }
+    }
+    if (total === 0) { out.fill(0, 0, nm); return; }
     for (let i = 0; i < nm; i++) {
-      const pl = mlo[i], ph = mhi[i];
-      let s = 0;
-      for (let j = 0; j < no; j++) { if ((pl & olo[j]) || (ph & ohi[j])) continue; s += reachOpp[j]; }
-      out[i] = pay * s;
+      const a = cA[me][i], b = cB[me][i];
+      const pj = oPair[a * 52 + b];
+      const pr = pj >= 0 ? reachOpp[pj] : 0;
+      out[i] = pay * (total - (cardTot[a] + cardTot[b] - pr));
     }
   }
 
-  // vector CFR (alternating): returns counterfactual values for p's combos.
+  // vector CFR (alternating): fills `out` (length sides[p]) with p's counterfactual values.
   const tmpStrat = new Float64Array(16);
-  function cfr(node, p, reachP, reachOpp, iterW) {
+  function cfr(node, p, reachP, reachOpp, iterW, out) {
     if (node.terminal) {
-      const out = new Float64Array(sides[p].length);
       if (node.type === 'showdown') showdownCFV(p, node, reachOpp, out);
       else foldCFV(p, node, reachOpp, out);
-      return out;
+      return;
     }
-    const A = node.A, N = node.N;
+    const A = node.A, N = node.N, sBuf = node.sBuf;
     if (node.player === p) {
-      const nodeCFV = new Float64Array(N);
-      const childCFV = [];
-      const strat = new Float64Array(N * A);
-      for (let i = 0; i < N; i++) { strategyOf(node, i, tmpStrat); for (let a = 0; a < A; a++) strat[i * A + a] = tmpStrat[a]; }
+      for (let i = 0; i < N; i++) { strategyOf(node, i, tmpStrat); for (let a = 0; a < A; a++) sBuf[i * A + a] = tmpStrat[a]; }
       for (let a = 0; a < A; a++) {
-        const rp = new Float64Array(N);
-        for (let i = 0; i < N; i++) rp[i] = reachP[i] * strat[i * A + a];
-        childCFV[a] = cfr(node.children[a], p, rp, reachOpp, iterW);
-        for (let i = 0; i < N; i++) nodeCFV[i] += strat[i * A + a] * childCFV[a][i];
+        const rp = node.reachBuf[a];
+        for (let i = 0; i < N; i++) rp[i] = reachP[i] * sBuf[i * A + a];
+        cfr(node.children[a], p, rp, reachOpp, iterW, node.cfvBuf[a]);
+      }
+      for (let i = 0; i < N; i++) {
+        let v = 0;
+        for (let a = 0; a < A; a++) v += sBuf[i * A + a] * node.cfvBuf[a][i];
+        out[i] = v;
       }
       // regret (CFR+) + linear strategy accumulation
       for (let i = 0; i < N; i++) {
-        const base = i * A, rpi = reachP[i];
+        const base = i * A, rpi = reachP[i], vi = out[i];
         for (let a = 0; a < A; a++) {
-          let r = node.regret[base + a] + (childCFV[a][i] - nodeCFV[i]);
+          let r = node.regret[base + a] + (node.cfvBuf[a][i] - vi);
           if (r < 0) r = 0;
           node.regret[base + a] = r;
-          node.strat[base + a] += iterW * rpi * strat[base + a];
+          node.strat[base + a] += iterW * rpi * sBuf[base + a];
         }
       }
-      return nodeCFV;
+      return;
     }
     // opponent acts: split opp reach by their strategy, sum child values
-    const cfv = new Float64Array(sides[p].length);
+    const np = sides[p].length;
+    for (let j = 0; j < N; j++) { strategyOf(node, j, tmpStrat); for (let a = 0; a < A; a++) sBuf[j * A + a] = tmpStrat[a]; }
+    for (let i = 0; i < np; i++) out[i] = 0;
     for (let a = 0; a < A; a++) {
-      const ro = new Float64Array(N);
-      for (let j = 0; j < N; j++) { strategyOf(node, j, tmpStrat); ro[j] = reachOpp[j] * tmpStrat[a]; }
-      const c = cfr(node.children[a], p, reachP, ro, iterW);
-      for (let i = 0; i < c.length; i++) cfv[i] += c[i];
+      const ro = node.reachBuf[a];
+      for (let j = 0; j < N; j++) ro[j] = reachOpp[j] * sBuf[j * A + a];
+      const c = node.cfvBuf[a];
+      cfr(node.children[a], p, reachP, ro, iterW, c);
+      for (let i = 0; i < np; i++) out[i] += c[i];
     }
-    return cfv;
+  }
+
+  // avg-strategy matrix for a node into its scratch buffer
+  function fillAvg(node) {
+    const A = node.A, N = node.N, sBuf = node.sBuf, acc = node.strat;
+    for (let i = 0; i < N; i++) {
+      const base = i * A;
+      let sum = 0;
+      for (let a = 0; a < A; a++) sum += acc[base + a];
+      if (sum > 0) for (let a = 0; a < A; a++) sBuf[base + a] = acc[base + a] / sum;
+      else { const u = 1 / A; for (let a = 0; a < A; a++) sBuf[base + a] = u; }
+    }
   }
 
   // value of p's avg strategy vs opp avg strategy (or best response if br===p)
-  function evalValue(node, p, reachP, reachOpp, br) {
+  function evalValue(node, p, reachP, reachOpp, br, out) {
     if (node.terminal) {
-      const out = new Float64Array(sides[p].length);
       if (node.type === 'showdown') showdownCFV(p, node, reachOpp, out);
       else foldCFV(p, node, reachOpp, out);
-      return out;
+      return;
     }
-    const A = node.A, N = node.N;
+    const A = node.A, N = node.N, sBuf = node.sBuf;
+    fillAvg(node);
     if (node.player === p) {
-      const childCFV = [];
+      const useAvg = br !== p;
       for (let a = 0; a < A; a++) {
-        const rp = new Float64Array(N);
-        const useAvg = br !== p;
-        for (let i = 0; i < N; i++) rp[i] = reachP[i] * (useAvg ? avgStrat(node, i, a) : 1);
-        childCFV[a] = evalValue(node.children[a], p, rp, reachOpp, br);
+        const rp = node.reachBuf[a];
+        for (let i = 0; i < N; i++) rp[i] = useAvg ? reachP[i] * sBuf[i * A + a] : reachP[i];
+        evalValue(node.children[a], p, rp, reachOpp, br, node.cfvBuf[a]);
       }
-      const out = new Float64Array(N);
       if (br === p) { // best response: max over actions per combo
-        for (let i = 0; i < N; i++) { let m = -Infinity; for (let a = 0; a < A; a++) if (childCFV[a][i] > m) m = childCFV[a][i]; out[i] = m; }
+        for (let i = 0; i < N; i++) { let m = -Infinity; for (let a = 0; a < A; a++) if (node.cfvBuf[a][i] > m) m = node.cfvBuf[a][i]; out[i] = m; }
       } else {
-        for (let i = 0; i < N; i++) { let v = 0; for (let a = 0; a < A; a++) v += avgStrat(node, i, a) * childCFV[a][i]; out[i] = v; }
+        for (let i = 0; i < N; i++) { let v = 0; for (let a = 0; a < A; a++) v += sBuf[i * A + a] * node.cfvBuf[a][i]; out[i] = v; }
       }
-      return out;
+      return;
     }
-    const cfv = new Float64Array(sides[p].length);
+    const np = sides[p].length;
+    for (let i = 0; i < np; i++) out[i] = 0;
     for (let a = 0; a < A; a++) {
-      const ro = new Float64Array(N);
-      for (let j = 0; j < N; j++) ro[j] = reachOpp[j] * avgStrat(node, j, a);
-      const c = evalValue(node.children[a], p, reachP, ro, br);
-      for (let i = 0; i < c.length; i++) cfv[i] += c[i];
+      const ro = node.reachBuf[a];
+      for (let j = 0; j < N; j++) ro[j] = reachOpp[j] * sBuf[j * A + a];
+      const c = node.cfvBuf[a];
+      evalValue(node.children[a], p, reachP, ro, br, c);
+      for (let i = 0; i < np; i++) out[i] += c[i];
     }
-    return cfv;
   }
   function avgStrat(node, i, a) {
     const A = node.A, base = i * A;
     let sum = 0; for (let x = 0; x < A; x++) sum += node.strat[base + x];
     return sum > 0 ? node.strat[base + a] / sum : 1 / A;
   }
+  const rootReach = [new Float64Array(nO).fill(1), new Float64Array(nI).fill(1)];
+  const rootOut = [new Float64Array(nO), new Float64Array(nI)];
   function rootValue(p, br) {
-    const reachP = new Float64Array(sides[p].length).fill(1);
-    const reachOpp = new Float64Array(sides[1 - p].length).fill(1);
-    const cfv = evalValue(tree.root, p, reachP, reachOpp, br);
+    evalValue(tree.root, p, rootReach[p], rootReach[1 - p], br, rootOut[p]);
+    const cfv = rootOut[p];
     let s = 0; for (let i = 0; i < cfv.length; i++) s += cfv[i];
     return s / Z;
   }
@@ -300,8 +382,8 @@ export function solve(board, oopKeys, ipKeys, spot, opts = {}, onProgress) {
   const traceEvery = Math.max(1, Math.floor(iters / 32));
   for (let t = 1; t <= iters; t++) {
     const w = t; // linear averaging
-    cfr(tree.root, 0, new Float64Array(nO).fill(1), new Float64Array(nI).fill(1), w);
-    cfr(tree.root, 1, new Float64Array(nI).fill(1), new Float64Array(nO).fill(1), w);
+    cfr(tree.root, 0, rootReach[0], rootReach[1], w, rootOut[0]);
+    cfr(tree.root, 1, rootReach[1], rootReach[0], w, rootOut[1]);
     if (t % traceEvery === 0 || t === iters) {
       const e = exploitabilityPctPot();
       trace.push(e.exploit);
