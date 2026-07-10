@@ -150,12 +150,18 @@ body {
 .stage.compact .felt { inset: 36px 18px; }
 .stage.compact .board { gap: 6px; }
 .stage.compact .board-label { top: calc(50% + 50px); max-width: 320px; text-align: center; }
-/* compact plates: drop the W/T microtext, slim the chrome */
+/* compact plates: slim the chrome so the full 9-seat ring fits the oval */
 .stage.compact .seat-equity-row.sub { display: none; }
-.stage.compact .seat-wrap { width: 132px; }
-.stage.compact .range-mini { gap: 7px; }
-.stage.compact .seat { padding: 5px 6px 6px; gap: 3px; }
-.stage.compact .seat-body { padding: 6px 4px; }
+.stage.compact .seat-wrap { width: 118px; }
+.stage.compact .seat { padding: 4px 6px 5px; gap: 2px; }
+.stage.compact .seat-body { padding: 3px; }
+.stage.compact .seat-equity { flex-direction: row; align-items: center; gap: 5px; padding: 1px 2px 0; }
+.stage.compact .seat-equity-label { display: none; }
+.stage.compact .equity-bar { flex: 1 1 auto; height: 3px; }
+.stage.compact .range-mini { gap: 6px; }
+.stage.compact .range-mini-grid { grid-template-columns: repeat(13, 3.25px); grid-template-rows: repeat(13, 3.25px); }
+.stage.compact .rmc { width: 3.25px; height: 3.25px; }
+.stage.compact .range-mini-count { font-size: 15px; }
 
 /* Board cards row */
 .board-remove-btn {
