@@ -13,7 +13,7 @@ export function PlayerSeat({
   onRename,
   compact = false,
 }) {
-  const cardSize = 'md';
+  const cardSize = compact ? 'bd' : 'md';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name || '');
   const inputRef = useRef(null);

@@ -62,18 +62,17 @@ function computeSeatPositions(rx_pct, ry_pct, STAGE_W, STAGE_H) {
 
 // desktop landscape stage vs near-portrait stage for phones
 const CALC_STAGE = { w: 1080, h: 600 };
-const CALC_STAGE_COMPACT = { w: 500, h: 860 };
-// portrait stage: the board row gets its own channel between the mid-side seat
-// rows; 52.4% is as centered as it gets without re-colliding the upper seats
-const COMPACT_BOARD_Y = 52.4;
+const CALC_STAGE_COMPACT = { w: 500, h: 916 };
+// board dead-center on the felt; compact plates are slimmed (see styles) so
+// the full 9-seat ring fits
+const COMPACT_BOARD_Y = 50;
 const SEAT_POSITIONS = computeSeatPositions(44, 35, CALC_STAGE.w, CALC_STAGE.h);
 const SEAT_POSITIONS_COMPACT = (() => {
-  const pos = computeSeatPositions(36, 41, CALC_STAGE_COMPACT.w, CALC_STAGE_COMPACT.h);
-  const nudge = (i, dx, dy) => { pos[i] = { x: pos[i].x + dx, y: pos[i].y + dy }; };
-  nudge(1, 0.6, 0); nudge(8, -0.6, 0);
-  nudge(2, 0, -5.6); nudge(7, 0, -5.6);
-  nudge(3, 0, 2.1); nudge(6, 0, 2.1);
-  nudge(4, 0, 0.9); nudge(5, 0, 0.9);
+  const pos = computeSeatPositions(36.5, 41.5, CALC_STAGE_COMPACT.w, CALC_STAGE_COMPACT.h);
+  // the arc parks the mid-side seats just above center, on the centered board's
+  // row — lift them (and the lower sides a touch) clear of it
+  [2, 7].forEach((i) => { pos[i] = { ...pos[i], y: pos[i].y - 5.5 }; });
+  [3, 6].forEach((i) => { pos[i] = { ...pos[i], y: pos[i].y - 2.0 }; });
   return pos;
 })();
 
@@ -780,7 +779,7 @@ export default function App() {
             {/* Board */}
             <div
               className={"board-label" + (!validBoard ? ' board-label-warn' : '')}
-              style={compact ? { top: `calc(${COMPACT_BOARD_Y}% + 50px)` } : null}
+              style={compact ? { top: `calc(${COMPACT_BOARD_Y}% + 48px)` } : null}
             >
               {board.length === 0 ? 'Pre-flop' :
                board.length === 1 ? 'Incomplete flop · need 2 more cards' :
@@ -790,7 +789,7 @@ export default function App() {
                'River'}
             </div>
             <div className="board" style={compact ? { top: COMPACT_BOARD_Y + '%' } : null}>
-              <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size={compact ? 'mdr' : 'lg'} />
+              <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size={compact ? 'md' : 'lg'} />
             </div>
             {/* Seats */}
             {(compact ? SEAT_POSITIONS_COMPACT : SEAT_POSITIONS).map((pos, i) => (
