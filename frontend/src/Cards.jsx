@@ -134,6 +134,7 @@ const SLOT_SIZES = {
   sm: { w: 32, h: 44, radius: 4, font: 16 },
   bd: { w: 42, h: 58, radius: 5, font: 18 },
   md: { w: 50, h: 68, radius: 6, font: 20 },
+  mdr: { w: 55, h: 75, radius: 6, font: 21 },
   lg: { w: 64, h: 88, radius: 8, font: 24 },
 };
 
@@ -185,6 +186,20 @@ export function BoardStrip({ board, onDeal, onClearFrom, size = 'sm' }) {
         {n >= 5 ? <PlayingCard card={cards[4]} size={size} /> : <EmptyCardSlot size={size} label="+" />}
       </button>
     </>
+  );
+}
+
+// monochrome sun/moon for the theme toggle (text glyphs render as color emoji on iOS)
+export function ThemeIcon({ theme }) {
+  return theme === 'dark' ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
   );
 }
 

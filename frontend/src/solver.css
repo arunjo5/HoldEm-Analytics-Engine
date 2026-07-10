@@ -29,6 +29,17 @@
 
 .sv-body { flex: 1; min-height: 0; }
 
+/* error banner */
+.sv-error-banner {
+  display: flex; align-items: flex-start; gap: 9px;
+  max-width: min(1280px, calc(100% - 48px)); margin: 16px auto 0;
+  padding: 10px 14px;
+  background: rgba(216,70,62,0.09); border: 1px solid rgba(216,70,62,0.35); border-radius: 9px;
+  font-size: 12px; line-height: 1.5; color: #e2938c;
+}
+.sv-error-banner svg { flex-shrink: 0; margin-top: 2px; color: var(--red); }
+.light .sv-error-banner { background: rgba(216,70,62,0.07); color: #9a2922; }
+
 /* ── shared bits ── */
 .sv-pos-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -64,7 +75,7 @@
 .card-chip-rank { font-variant-numeric: tabular-nums; }
 
 /* ════════ SETUP ════════ */
-.sv-setup { padding: 22px 24px 40px; }
+.sv-setup { padding: 20px 24px 40px; }
 .sv-setup-grid {
   max-width: 1280px; margin: 0 auto;
   display: grid; grid-template-columns: minmax(0, 1fr) 452px; gap: 22px;
@@ -77,7 +88,8 @@
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px;
   padding: 18px; box-shadow: 0 1px 0 rgba(0,0,0,0.2);
 }
-.sv-felt { position: relative; height: 446px; }
+/* board slots sit on green felt in both themes — keep them light */
+.sv-felt { position: relative; height: 446px; --slot-border: rgba(255,255,255,0.3); --slot-fg: rgba(255,255,255,0.45); --slot-active-bg: rgba(255,255,255,0.06); }
 .sv-felt-rim { position: absolute; inset: 30px 22px; border-radius: 50%/50%; background: var(--felt-rim); }
 .sv-felt-inner { position: absolute; inset: 40px 34px; border-radius: 50%/50%; background: var(--felt); box-shadow: inset 0 0 60px rgba(0,0,0,0.25); }
 .sv-felt-inner::before { content: ''; position: absolute; inset: 14px; border-radius: 50%/50%; border: 1px solid rgba(255,255,255,0.05); }
@@ -91,8 +103,8 @@
 }
 .sv-seat-oop { top: 0; }
 .sv-seat-ip { bottom: 0; }
-.sv-seat-head { display: flex; align-items: center; gap: 6px; width: 100%; white-space: nowrap; }
-.sv-seat-name { font-size: 11px; color: var(--text-dim); font-weight: 500; }
+.sv-seat-head { display: flex; align-items: center; gap: 6px; width: 100%; white-space: nowrap; min-width: 0; }
+.sv-seat-name { font-size: 11px; color: var(--text-dim); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 .sv-seat-thumb { display: flex; justify-content: center; }
 .sv-seat-meta { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); letter-spacing: 0.02em; }
 
@@ -162,9 +174,7 @@
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px;
   padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px;
 }
-.sv-config-head { }
-.sv-config-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.sv-config-sub { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
+.sv-players-field { gap: 12px; }
 .sv-divider { height: 1px; background: var(--border); margin: 2px 0; }
 
 .sv-field { display: flex; flex-direction: column; gap: 9px; }
@@ -180,6 +190,7 @@
 .sv-clear-board:hover { color: var(--red); }
 .sv-board-slot.sm:hover { transform: translateY(-1px); }
 .sv-deal-btn { width: 100%; margin-top: 8px; justify-content: center; border-style: dashed; }
+.sv-hand-sel-row { padding: 14px 20px 0; display: flex; justify-content: flex-end; gap: 6px; }
 
 /* range rows */
 .sv-range-row { display: flex; gap: 14px; align-items: center; }
@@ -257,6 +268,7 @@
 .sv-solving-cards { display: flex; gap: 6px; }
 .sv-solving-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .sv-solving-sub { font-size: 11.5px; color: var(--text-dim); font-family: var(--font-mono); }
+.sv-solving-sub span { white-space: nowrap; }
 .sv-solving-bar-wrap { display: flex; flex-direction: column; gap: 9px; }
 .sv-solving-bar-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); letter-spacing: 0.02em; }
 .sv-solving-pct { margin-left: auto; font-family: var(--font-mono); font-weight: 600; color: var(--gold); font-size: 12px; }
@@ -272,7 +284,7 @@
 .sv-solving-note strong { color: var(--text-dim); }
 
 /* ════════ RESULTS ════════ */
-.sv-results { padding: 18px 24px 40px; max-width: 1360px; margin: 0 auto; }
+.sv-results { padding: 20px 24px 40px; max-width: 1360px; margin: 0 auto; }
 
 /* readout strip */
 .sv-readout {
@@ -297,7 +309,7 @@
 .sv-exploit-conv { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .sv-conv-check { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--green); font-weight: 600; }
 .sv-spark { display: block; }
-.sv-conv-iter { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); }
+.sv-conv-iter { font-size: 10px; color: var(--text-faint); font-family: var(--font-mono); white-space: nowrap; }
 .sv-readout-actions { display: flex; gap: 8px; align-self: center; }
 
 /* caveat */
@@ -359,6 +371,7 @@
   transition: box-shadow 0.1s ease, transform 0.1s ease;
 }
 .sv-cell.empty { background: transparent; border: 1px solid var(--border); cursor: default; opacity: 0.4; }
+.sv-cell-tint { position: absolute; inset: 0; }
 .sv-cell-fill { position: absolute; inset: 0; display: flex; }
 .sv-cell-fill > div { height: 100%; }
 .sv-cell-label {
@@ -368,6 +381,8 @@
 .sv-cell-label.over { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.65); }
 .sv-cell.empty .sv-cell-label { color: var(--text-faint); }
 .sv-cell.solid .sv-cell-label { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+/* light theme: dark ink reads on cold (pale) and hot (tinted) cells alike */
+.light .sv-cell.solid .sv-cell-label { color: #241c10; text-shadow: 0 1px 2px rgba(255,255,255,0.4); }
 .sv-cell:hover:not(.empty) { box-shadow: 0 0 0 2px var(--gold-dim); z-index: 3; transform: translateY(-1px); }
 .sv-cell.selected { box-shadow: 0 0 0 2px var(--gold); z-index: 4; }
 
@@ -407,17 +422,43 @@
 
 @media (max-width: 720px) {
   .sv-header { flex-wrap: wrap; row-gap: 6px; gap: 10px; padding: 10px 12px; }
+  .sv-error-banner { max-width: calc(100% - 20px); margin-top: 12px; }
+  /* setup */
+  .sv-setup { padding: 14px 10px 28px; }
+  .sv-felt { height: 440px; }
+  .sv-felt-card { padding: 10px; }
+  .sv-seat { width: 146px; }
+  .sv-config-card { padding: 16px 14px; }
+  .sv-solve-row { flex-wrap: wrap; }
+  /* solving: top-align — the centering math assumes the short desktop header */
+  .sv-solving { align-items: flex-start; min-height: 0; padding: 24px 14px 36px; }
+  .sv-solving-card { width: 100%; padding: 24px 18px 20px; gap: 18px; }
+  /* results */
+  .sv-results { padding: 14px 10px 28px; }
+  .sv-readout { gap: 12px; padding: 12px; }
   .sv-readout-left { flex-wrap: wrap; gap: 10px; }
   .sv-spot-line { flex-wrap: wrap; }
-  .sv-setup { padding: 12px 10px 28px; }
-  .sv-felt { height: 470px; }
-  .sv-felt-card { padding: 10px; }
-  .sv-seat { width: 128px; }
-  .sv-results { padding: 12px 10px 28px; }
-  .sv-readout { gap: 12px; padding: 12px; }
-  .sv-readout-actions { margin-left: 0; }
+  .sv-readout-stats { flex-wrap: wrap; row-gap: 10px; }
+  .sv-readout-actions { margin-left: 0; width: 100%; }
+  .sv-readout-actions .btn { flex: 1 1 0; justify-content: center; }
+  .sv-node-tabs { width: 100%; }
+  .sv-node-tab { flex: 1 1 auto; justify-content: center; }
+  .sv-grid-panel { padding: 12px 10px; }
   .sv-grid { gap: 1px; }
   .sv-cell-label { font-size: 7px; }
-  .sv-solving-card { width: 100%; }
-  .sv-config-card { padding: 14px 12px; }
+  .sv-detail-panel { padding: 14px; }
+}
+
+@media (max-width: 520px) {
+  /* exploit block wraps under the EVs — drop its column rule */
+  .sv-stat-exploit { border-left: none; padding-left: 0; }
+  /* stat tiles become label/value rows */
+  .sv-solving-stats { grid-template-columns: 1fr; gap: 7px; }
+  .sv-solving-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; text-align: left; padding: 10px 13px; }
+  .sv-solving-stat-label { margin-bottom: 0; }
+  .sv-solving-stat-val { font-size: 15px; }
+  /* equity table: tighter cells, slimmer bar */
+  .sv-equity-table th { padding: 4px 5px 7px; }
+  .sv-equity-table td { padding: 8px 5px; font-size: 11.5px; }
+  .sv-eqbar-col { width: 48px; }
 }

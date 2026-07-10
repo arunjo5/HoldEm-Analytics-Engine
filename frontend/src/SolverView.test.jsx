@@ -188,3 +188,59 @@ describe('jobId staleness guard', () => {
     expect(document.querySelectorAll('.sv-solving-stat-val')[0].textContent).toBe('0');
   });
 });
+
+describe('Header userMenu + theme toggle', () => {
+  it('renders the userMenu in .sv-header-right next to the theme toggle', () => {
+    render(<SolverView onExit={() => {}} theme="dark" onToggleTheme={() => {}} userMenu={<div data-testid="menu" />} />);
+    const right = document.querySelector('.sv-header-right');
+    expect(within(right).getByTestId('menu')).toBeInTheDocument();
+    expect(within(right).getByRole('button', { name: 'Toggle theme' })).toBeInTheDocument();
+  });
+
+  it('omitting userMenu still renders the header with just the theme toggle', () => {
+    render(<SolverView onExit={() => {}} theme="dark" onToggleTheme={() => {}} />);
+    const right = document.querySelector('.sv-header-right');
+    expect(right).not.toBeNull();
+    expect(screen.queryByTestId('menu')).toBeNull();
+    expect(within(right).getByRole('button', { name: 'Toggle theme' })).toBeInTheDocument();
+  });
+
+  it('theme toggle shows the sun icon (a circle) in dark mode', () => {
+    render(<SolverView onExit={() => {}} theme="dark" onToggleTheme={() => {}} />);
+    const btn = screen.getByRole('button', { name: 'Toggle theme' });
+    expect(btn.querySelector('svg')).not.toBeNull();
+    expect(btn.querySelector('svg circle')).not.toBeNull();
+  });
+
+  it('theme toggle shows the moon icon (no circle) in light mode and fires the callback', () => {
+    const onToggleTheme = vi.fn();
+    render(<SolverView onExit={() => {}} theme="light" onToggleTheme={onToggleTheme} />);
+    const btn = screen.getByRole('button', { name: 'Toggle theme' });
+    expect(btn.querySelector('svg')).not.toBeNull();
+    expect(btn.querySelector('svg circle')).toBeNull();
+    expect(btn.querySelector('svg path')).not.toBeNull();
+    fireEvent.click(btn);
+    expect(onToggleTheme).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('solving sub-line + error banner structure', () => {
+  it('the solving sub-line is three spans: combos, tree size, pot', () => {
+    renderReady();
+    fireEvent.click(solveBtn());
+    const spans = document.querySelectorAll('.sv-solving-sub span');
+    expect(spans).toHaveLength(3);
+    expect(spans[0].textContent).toBe('4 × 6 combos');
+    expect(spans[1].textContent).toBe('4-size tree');
+    expect(spans[2].textContent).toBe('pot 20 bb');
+  });
+
+  it('the error banner renders an svg icon alongside the message text', () => {
+    renderReady();
+    fireEvent.click(solveBtn());
+    msg({ jobId: 1, type: 'error', message: 'boom' });
+    const banner = document.querySelector('.sv-error-banner');
+    expect(banner.querySelector('svg')).not.toBeNull();
+    expect(banner.textContent).toBe('boom');
+  });
+});

@@ -95,4 +95,34 @@ describe('solverWorker message protocol', () => {
     post(tinyJob({ jobId: 0, spot: undefined }));
     expect(messages().at(-1)).toMatchObject({ jobId: 0, type: 'error' });
   });
+
+  it('an all-blocked matchup posts a done with an empty result and no progress', () => {
+    post(tinyJob({
+      jobId: 'j-empty', oopKeys: ['AA'], ipKeys: ['AA'],
+      opts: { iterations: 8, oopRestrict: new Set(['AsAh']), ipRestrict: new Set(['AsAh']) },
+    }));
+    const msgs = messages();
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatchObject({ jobId: 'j-empty', type: 'done' });
+    expect(msgs[0].result).toMatchObject({ empty: true });
+    expect(msgs.some((m) => m.type === 'progress')).toBe(false);
+  });
+
+  it('forwards opts.oopRestrict into the solve, thinning the range to one combo', () => {
+    post(tinyJob({ jobId: 'j-restrict', oopKeys: ['AA'], opts: { iterations: 16, oopRestrict: new Set(['AsAh']) } }));
+    const done = messages().find((m) => m.type === 'done');
+    expect(done.result.oopCount).toBe(1);
+    expect(done.result.nodeSolves.oop_first.combos.map((c) => c.id)).toEqual(['AsAh']);
+  });
+
+  it('handles sequential jobs independently, tagging each batch with its own id', () => {
+    post(tinyJob({ jobId: 'a' }));
+    expect(messages().at(-1)).toMatchObject({ jobId: 'a', type: 'done' });
+    self.postMessage.mockClear();
+    post(tinyJob({ jobId: 'b' }));
+    const msgs = messages();
+    expect(msgs.length).toBeGreaterThan(1);
+    for (const m of msgs) expect(m.jobId).toBe('b');
+    expect(msgs.at(-1).type).toBe('done');
+  });
 });

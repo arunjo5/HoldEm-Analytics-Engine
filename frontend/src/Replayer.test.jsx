@@ -649,3 +649,113 @@ describe('share URL helpers', () => {
     expect(out.board).toEqual(HAND.board);
   });
 });
+
+describe('ReplayerHeader layout', () => {
+  it('playback renders the actions cluster with Share / New hand / Favorite', () => {
+    show(HAND);
+    const actions = document.querySelector('.replayer-header-actions');
+    expect(actions).not.toBeNull();
+    expect(within(actions).getByText('Share')).toBeInTheDocument();
+    expect(within(actions).getByText('New hand')).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Favorite' })).toBeInTheDocument();
+  });
+
+  it('the builder header omits the actions cluster but keeps the account cluster', () => {
+    show(undefined);
+    expect(document.querySelector('.replayer-header-actions')).toBeNull();
+    expect(document.querySelector('.replayer-header-account')).not.toBeNull();
+  });
+
+  it('themeToggle and userMenu render inside the account cluster', () => {
+    show(HAND, { themeToggle: <button>toggle-theme</button>, userMenu: <div data-testid="user-menu" /> });
+    const account = document.querySelector('.replayer-header-account');
+    expect(within(account).getByText('toggle-theme')).toBeInTheDocument();
+    expect(within(account).getByTestId('user-menu')).toBeInTheDocument();
+  });
+});
+
+describe('TransportBar icons', () => {
+  it('all four controls render svg icons and no glyph text', () => {
+    show(HAND);
+    ['First', 'Back', 'Forward', 'Last'].forEach((label) => {
+      const btn = screen.getByLabelText(label);
+      expect(btn.querySelector('svg')).not.toBeNull();
+      expect(btn.textContent).toBe('');
+    });
+    expect(document.querySelector('.replay-controls').textContent).not.toMatch(/[⏮⏭◀▶]/);
+  });
+});
+
+describe('run-it-twice board rows', () => {
+  it('renders two rows tagged RUN 1 / RUN 2 with run 2 pending until it is dealt', () => {
+    show(ritHand());
+    forward(); forward(); forward(); // step into the first run-it-twice frame
+    const rows = document.querySelectorAll('.replay-boards-twice .replay-board');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('RUN 1')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('RUN 2')).toBeInTheDocument();
+    expect(rows[0].className).toContain('small');
+    expect(rows[0].className).not.toContain('pending');
+    expect(rows[1].className).toContain('pending');
+  });
+
+  it('clears the pending dim on the run-2 row once activeRun reaches 2', () => {
+    show(ritHand());
+    last();
+    const rows = document.querySelectorAll('.replay-boards-twice .replay-board');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].className).not.toContain('pending');
+  });
+});
+
+describe('dealer button placement', () => {
+  it('renders exactly one dealer button, inside seat 0 plate', () => {
+    renderReplayer();
+    const dealers = document.querySelectorAll('.replay-dealer-btn');
+    expect(dealers).toHaveLength(1);
+    expect(dealers[0].textContent).toBe('D');
+    expect(dealers[0].closest('.replay-seat-plate')).not.toBeNull();
+    expect(seatOf('rex').querySelector('.replay-dealer-btn')).not.toBeNull(); // rex is seat 0 (BTN)
+  });
+});
+
+describe('builder acting banner', () => {
+  it('omits the position chip when the acting seat has no custom name', () => {
+    show(undefined);
+    enterActionPhase(4, PAIRS4);
+    const acting = document.querySelector('.builder-acting');
+    expect(acting.textContent).toContain('Action on UTG');
+    expect(acting.querySelector('.builder-acting-pos')).toBeNull();
+  });
+
+  it('shows the position chip when the acting seat has a custom name', () => {
+    show(undefined);
+    fireEvent.click(screen.getByRole('button', { name: '4' }));
+    fireEvent.change(screen.getByPlaceholderText('Player 4'), { target: { value: 'neil' } });
+    PAIRS4.forEach((pair) => { fireEvent.click(screen.getAllByText('+ cards')[0]); pickCards(pair); });
+    fireEvent.click(screen.getByText('Enter action →'));
+    const acting = document.querySelector('.builder-acting');
+    expect(acting.textContent).toContain('Action on neil');
+    const chip = acting.querySelector('.builder-acting-pos');
+    expect(chip).not.toBeNull();
+    expect(chip.textContent).toBe('UTG');
+  });
+});
+
+describe('builder cards slot', () => {
+  it('wraps the cards button in a slot; the clear badge appears only once cards are set', () => {
+    show(undefined);
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    const slots = document.querySelectorAll('.builder-cards-slot');
+    expect(slots).toHaveLength(2);
+    expect(slots[0].querySelector('.builder-cards-btn')).not.toBeNull();
+    expect(screen.queryByLabelText('Clear cards')).toBeNull();
+    fireEvent.click(screen.getAllByText('+ cards')[0]);
+    pickCards(PAIRS2[0]);
+    const clear = within(document.querySelectorAll('.builder-cards-slot')[0]).getByLabelText('Clear cards');
+    expect(clear.textContent).toBe('×');
+    fireEvent.click(clear);
+    expect(screen.getAllByText('+ cards')).toHaveLength(2);
+    expect(within(document.querySelectorAll('.builder-cards-slot')[0]).queryByLabelText('Clear cards')).toBeNull();
+  });
+});

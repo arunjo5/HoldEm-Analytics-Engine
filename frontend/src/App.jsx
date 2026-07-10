@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as PokerEngine from './pokerEngine.js';
-import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_GLYPH, SUIT_RED, BoardStrip } from './Cards.jsx';
+import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_GLYPH, SUIT_RED, BoardStrip, ThemeIcon } from './Cards.jsx';
 import { CardPicker, RangePicker, SUIT_ORDER, VALUE_ORDER } from './Pickers.jsx';
 import { PlayerSeat } from './Seat.jsx';
 import { useAuth } from './AuthContext.jsx';
@@ -62,13 +62,18 @@ function computeSeatPositions(rx_pct, ry_pct, STAGE_W, STAGE_H) {
 
 // desktop landscape stage vs near-portrait stage for phones
 const CALC_STAGE = { w: 1080, h: 600 };
-const CALC_STAGE_COMPACT = { w: 520, h: 790 };
+const CALC_STAGE_COMPACT = { w: 500, h: 860 };
+// portrait stage: the board row gets its own channel between the mid-side seat
+// rows; 52.4% is as centered as it gets without re-colliding the upper seats
+const COMPACT_BOARD_Y = 52.4;
 const SEAT_POSITIONS = computeSeatPositions(44, 35, CALC_STAGE.w, CALC_STAGE.h);
 const SEAT_POSITIONS_COMPACT = (() => {
-  const pos = computeSeatPositions(37, 41, CALC_STAGE_COMPACT.w, CALC_STAGE_COMPACT.h);
-  // On the narrow portrait felt the bottom seats (Player 5 & 6) sit too close to
-  // the lower-side seats (4 & 7) — drop them a touch so range thumbnails clear.
-  [4, 5].forEach((i) => { pos[i] = { ...pos[i], y: pos[i].y + 4 }; });
+  const pos = computeSeatPositions(36, 41, CALC_STAGE_COMPACT.w, CALC_STAGE_COMPACT.h);
+  const nudge = (i, dx, dy) => { pos[i] = { x: pos[i].x + dx, y: pos[i].y + dy }; };
+  nudge(1, 0.6, 0); nudge(8, -0.6, 0);
+  nudge(2, 0, -5.6); nudge(7, 0, -5.6);
+  nudge(3, 0, 2.1); nudge(6, 0, 2.1);
+  nudge(4, 0, 0.9); nudge(5, 0, 0.9);
   return pos;
 })();
 
@@ -638,16 +643,27 @@ export default function App() {
     setBoard(newBoard);
   }
 
-  // Profile menu + history drawer — shared between the calculator and the replayer
-  // so a user can open another hand from history without leaving the replayer.
-  const userMenuEl = user ? (
-    <UserChip user={user} onSignOut={signOut} onOpenHistory={openHistory} onOpenShare={openShare} onOpenUpload={openUpload} />
-  ) : (
+  // profile menu + history drawer, shared across views; menu items are page-aware
+  const signInEl = (
     <button className="btn btn-signin" onClick={signIn}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
       </svg>
       Sign in
+    </button>
+  );
+  const accountMenuFor = (ctx) => user ? (
+    <UserChip
+      user={user}
+      onSignOut={signOut}
+      onOpenHistory={ctx !== 'solver' ? openHistory : undefined}
+      onOpenShare={ctx === 'calc' ? openShare : undefined}
+      onOpenUpload={ctx !== 'solver' ? openUpload : undefined}
+    />
+  ) : signInEl;
+  const themeToggleEl = (
+    <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme" title="Toggle theme">
+      <ThemeIcon theme={theme} />
     </button>
   );
   const historyDrawerEl = (
@@ -665,28 +681,52 @@ export default function App() {
     />
   );
 
+  // overlays render in every view
+  const sharedOverlays = (
+    <>
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onConfirm={onImportConfirm} />
+      {(sharedToast || importToast) && (
+        <div className="shared-toast">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          {importToast || 'Loaded shared scenario'}
+        </div>
+      )}
+    </>
+  );
+
   // The replayer takes over the whole screen when active.
   if (view === 'replayer') {
     return (
-      <ReplayerView
-        initialHand={replayHand}
-        onExit={() => setView('calc')}
-        onSaveToHistory={saveReplayToHistory}
-        onSetFavorite={toggleFavorite}
-        userMenu={userMenuEl}
-        historyDrawer={historyDrawerEl}
-      />
+      <>
+        <ReplayerView
+          initialHand={replayHand}
+          onExit={() => setView('calc')}
+          onSaveToHistory={saveReplayToHistory}
+          onSetFavorite={toggleFavorite}
+          userMenu={accountMenuFor('replayer')}
+          themeToggle={themeToggleEl}
+          historyDrawer={historyDrawerEl}
+        />
+        {sharedOverlays}
+      </>
     );
   }
 
   // The solver is its own full-screen mode.
   if (view === 'solver') {
     return (
-      <SolverView
-        onExit={() => setView('calc')}
-        theme={theme}
-        onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-      />
+      <>
+        <SolverView
+          onExit={() => setView('calc')}
+          theme={theme}
+          onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          userMenu={accountMenuFor('solver')}
+        />
+        {sharedOverlays}
+      </>
     );
   }
 
@@ -725,10 +765,8 @@ export default function App() {
           )}
         </div>
         <div className="topbar-account">
-          <button className="icon-btn" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
-          {userMenuEl}
+          {themeToggleEl}
+          {accountMenuFor('calc')}
         </div>
       </div>
 
@@ -740,7 +778,10 @@ export default function App() {
             <div className="felt" />
 
             {/* Board */}
-            <div className={"board-label" + (!validBoard ? ' board-label-warn' : '')}>
+            <div
+              className={"board-label" + (!validBoard ? ' board-label-warn' : '')}
+              style={compact ? { top: `calc(${COMPACT_BOARD_Y}% + 50px)` } : null}
+            >
               {board.length === 0 ? 'Pre-flop' :
                board.length === 1 ? 'Incomplete flop · need 2 more cards' :
                board.length === 2 ? 'Incomplete flop · need 1 more card' :
@@ -748,8 +789,8 @@ export default function App() {
                board.length === 4 ? 'Turn' :
                'River'}
             </div>
-            <div className="board">
-              <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size={compact ? 'bd' : 'lg'} />
+            <div className="board" style={compact ? { top: COMPACT_BOARD_Y + '%' } : null}>
+              <BoardStrip board={board} onDeal={onDealBoard} onClearFrom={onClearBoardFrom} size={compact ? 'mdr' : 'lg'} />
             </div>
             {/* Seats */}
             {(compact ? SEAT_POSITIONS_COMPACT : SEAT_POSITIONS).map((pos, i) => (
@@ -763,6 +804,7 @@ export default function App() {
                   equity={results.perPlayer[i] || null}
                   name={playerNames[i]}
                   onRename={(nm) => renamePlayer(i, nm)}
+                  compact={compact}
                 />
               </div>
             ))}
@@ -811,8 +853,6 @@ export default function App() {
       )}
 
       {historyDrawerEl}
-      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
-      <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onConfirm={onImportConfirm} />
       <SaveModal
         open={saveModalOpen}
         busy={saving}
@@ -820,15 +860,7 @@ export default function App() {
         onClose={() => setSaveModalOpen(false)}
         onSave={doSave}
       />
-
-      {(sharedToast || importToast) && (
-        <div className="shared-toast">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-          {importToast || 'Loaded shared scenario'}
-        </div>
-      )}
+      {sharedOverlays}
     </div>
   );
 }
@@ -885,6 +917,7 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
 }
 
 // ─── UserChip — avatar dropdown in the topbar ───
+// omitted handlers hide their menu items
 function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -911,25 +944,31 @@ function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload })
             <div className="user-menu-name">{user.name || 'Account'}</div>
             <div className="user-menu-email">{user.email}</div>
           </div>
-          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenUpload(); }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 16V4" /><path d="M7 9l5-5 5 5" /><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
-            </svg>
-            Import PokerNow log
-          </button>
-          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenHistory(); }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
-            </svg>
-            Hand history
-          </button>
-          <button className="user-menu-item" onClick={() => { setOpen(false); onOpenShare(); }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-              <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
-            </svg>
-            Share
-          </button>
+          {onOpenUpload && (
+            <button className="user-menu-item" onClick={() => { setOpen(false); onOpenUpload(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 16V4" /><path d="M7 9l5-5 5 5" /><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+              </svg>
+              Import PokerNow log
+            </button>
+          )}
+          {onOpenHistory && (
+            <button className="user-menu-item" onClick={() => { setOpen(false); onOpenHistory(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
+              </svg>
+              Hand history
+            </button>
+          )}
+          {onOpenShare && (
+            <button className="user-menu-item" onClick={() => { setOpen(false); onOpenShare(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+                <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+              </svg>
+              Share
+            </button>
+          )}
           <button className="user-menu-item danger" onClick={() => { setOpen(false); onSignOut(); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />

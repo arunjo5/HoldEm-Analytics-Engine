@@ -2,7 +2,7 @@
 // solve in a Web Worker and streams its progress into the solving screen.
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import './solver.css';
-import { PlayingCard } from './Cards.jsx';
+import { PlayingCard, ThemeIcon } from './Cards.jsx';
 import { sideToRangeKeys, combosFromKeys } from './solverEngine.js';
 import { SetupView } from './SolverSetup.jsx';
 import { ResultsView } from './SolverResults.jsx';
@@ -18,7 +18,7 @@ function restrictFor(side) {
   return null;
 }
 
-function Header({ onBack, theme, onToggleTheme }) {
+function Header({ onBack, theme, onToggleTheme, userMenu }) {
   return (
     <div className="sv-header">
       <button className="btn btn-ghost sv-back" onClick={onBack}>
@@ -32,7 +32,8 @@ function Header({ onBack, theme, onToggleTheme }) {
         Solver
       </span>
       <div className="sv-header-right">
-        <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme" title="Toggle theme">{theme === 'dark' ? '☀' : '☾'}</button>
+        <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme" title="Toggle theme"><ThemeIcon theme={theme} /></button>
+        {userMenu}
       </div>
     </div>
   );
@@ -47,7 +48,7 @@ function SolvingView({ spot, board, oopKeys, ipKeys, progress }) {
         <div className="sv-solving-top">
           <div className="sv-solving-cards">{board.map((c, i) => c && <PlayingCard key={i} card={c} size="sm" />)}</div>
           <div className="sv-solving-title">Solving heads-up river</div>
-          <div className="sv-solving-sub">{combosFromKeys(oopKeys)} × {combosFromKeys(ipKeys)} combos · {sizeCount}-size tree · pot {spot.pot} bb</div>
+          <div className="sv-solving-sub"><span>{combosFromKeys(oopKeys)} × {combosFromKeys(ipKeys)} combos</span>{' · '}<span>{sizeCount}-size tree</span>{' · '}<span>pot {spot.pot} bb</span></div>
         </div>
         <div className="sv-solving-bar-wrap">
           <div className="sv-solving-bar-head"><span className="dot-pulse" /> Running CFR iterations<span className="sv-solving-pct">{pct}%</span></div>
@@ -64,7 +65,7 @@ function SolvingView({ spot, board, oopKeys, ipKeys, progress }) {
   );
 }
 
-export function SolverView({ onExit, theme, onToggleTheme }) {
+export function SolverView({ onExit, theme, onToggleTheme, userMenu }) {
   const [stage, setStage] = useState('setup'); // setup | solving | results
   const [spot, setSpot] = useState(() => JSON.parse(JSON.stringify(DEFAULT_SPOT)));
   const [board, setBoard] = useState(() => DEFAULT_BOARD.slice());
@@ -110,9 +111,9 @@ export function SolverView({ onExit, theme, onToggleTheme }) {
 
   return (
     <div className="sv-app">
-      <Header onBack={() => { if (stage === 'setup') onExit(); else setStage('setup'); }} theme={theme} onToggleTheme={onToggleTheme} />
+      <Header onBack={() => { if (stage === 'setup') onExit(); else setStage('setup'); }} theme={theme} onToggleTheme={onToggleTheme} userMenu={userMenu} />
       <div className="sv-body">
-        {error && <div className="sv-error-banner">{error}</div>}
+        {error && <div className="sv-error-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" /></svg>{error}</div>}
         {stage === 'setup' && (
           <SetupView spot={spot} setSpot={setSpot} board={board} setBoard={setBoard}
             oopSide={oopSide} setOopSide={setOopSide} ipSide={ipSide} setIpSide={setIpSide}

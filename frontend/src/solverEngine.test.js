@@ -202,6 +202,29 @@ describe('solve — card removal and the empty path', () => {
     expect(r.nodeSolves.oop_first.combos).toHaveLength(1);
     expect(r.nodeSolves.oop_first.combos[0].id).toBe('AsKs');
   });
+
+  it('a restrict set keeps only the live combos when one restricted combo is board-dead', () => {
+    const r = solve(board('Ks', '7d', '2c', '8h', '3s'), ['AKs'], ['22'], spotOf(),
+      { iterations: 8, oopRestrict: new Set(['AhKh', 'AsKs']) });
+    expect(r.oopCount).toBe(1); // AsKs is killed by the Ks on the board
+    expect(r.nodeSolves.oop_first.combos.map((c) => c.id)).toEqual(['AhKh']);
+  });
+
+  it('a restrict set disjoint from the range yields the empty result', () => {
+    const r = solve(LOW, ['AA'], ['KK'], spotOf(), { iterations: 8, oopRestrict: new Set(['9h9d']) });
+    expect(r).toEqual({ empty: true, oopCount: 0, ipCount: 6 });
+  });
+
+  it('a range collapses to a single live combo when the board blocks the rest', () => {
+    const r = solve(board('As', 'Ah', '2c', '8d', '3s'), ['AA'], ['KK'],
+      spotOf({ betSizes: sizes(75), allIn: false }), { iterations: 8 });
+    expect(r.oopCount).toBe(1);
+    const cm = r.nodeSolves.oop_first.combos;
+    expect(cm).toHaveLength(1);
+    expect(cm[0].id).toBe('AdAc'); // As/Ah on board leave only AdAc live
+    expect(cm[0].str).toBe(0.5);   // single live combo → mid percentile
+    expect(r.ipCount).toBe(6);
+  });
 });
 
 describe('buildTree — action sets observed through solve()', () => {
@@ -252,6 +275,21 @@ describe('buildTree — action sets observed through solve()', () => {
   it('stack 0 yields a check-only tree', () => {
     const r = solve(LOW, ['AA'], ['KK'], spotOf({ stack: 0, betSizes: sizes(75), allIn: false }), { iterations: 8 });
     expect(r.nodes.find((n) => n.id === 'oop_first').actions.map((a) => a.id)).toEqual(['check']);
+  });
+
+  it('dedups two distinct bet sizes that round to the same chip amount, keeping the first', () => {
+    // pot 10: 11% and 14% both round to 1 chip → the second is dropped, all-in stays distinct
+    const r = solve(LOW, ['AA'], ['KK'], spotOf({ pot: 10, stack: 400, betSizes: sizes(11, 14), allIn: true }), { iterations: 8 });
+    const root = r.nodes.find((n) => n.id === 'oop_first');
+    expect(root.actions.map((a) => a.id)).toEqual(['check', 'b11', 'allin']);
+  });
+
+  it('an on-size that already equals the all-in amount absorbs the separate all-in action', () => {
+    // pot 20 / stack 20: 125% clamps to the 20-chip shove, so allIn dedups away
+    const r = solve(LOW, ['AA'], ['KK'], spotOf({ stack: 20, betSizes: sizes(125), allIn: true }), { iterations: 8 });
+    const root = r.nodes.find((n) => n.id === 'oop_first');
+    expect(root.actions.map((a) => a.id)).toEqual(['check', 'b125']);
+    expect(root.actions.some((a) => a.id === 'allin')).toBe(false);
   });
 });
 

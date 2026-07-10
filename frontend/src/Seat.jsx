@@ -11,7 +11,9 @@ export function PlayerSeat({
   equity,
   name,
   onRename,
+  compact = false,
 }) {
+  const cardSize = 'md';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name || '');
   const inputRef = useRef(null);
@@ -83,15 +85,15 @@ export function PlayerSeat({
         {!player && (
           <div className="seat-empty">
             <div className="seat-empty-row">
-              <CardBack size="sm" />
-              <CardBack size="sm" />
+              <CardBack size={cardSize} />
+              <CardBack size={cardSize} />
             </div>
           </div>
         )}
         {player && player.kind === 'hand' && (
           <div className="seat-cards">
-            <PlayingCard card={player.hand[0]} size="md" />
-            <PlayingCard card={player.hand[1]} size="md" />
+            <PlayingCard card={player.hand[0]} size={cardSize} />
+            <PlayingCard card={player.hand[1]} size={cardSize} />
           </div>
         )}
         {player && player.kind === 'range' && (
@@ -116,7 +118,7 @@ export function PlayerSeat({
   );
 }
 
-// 13x13 thumbnail of a range.
+// 13x13 range thumbnail at hole-card height, so all plates share one footprint
 export function RangeMini({ keys }) {
   const set = new Set(keys);
   return (
@@ -134,7 +136,10 @@ export function RangeMini({ keys }) {
           })
         )}
       </div>
-      <div className="range-mini-label">{keys.length} hands</div>
+      <div className="range-mini-meta">
+        <span className="range-mini-count">{keys.length}</span>
+        <span className="range-mini-unit">hands</span>
+      </div>
     </div>
   );
 }
