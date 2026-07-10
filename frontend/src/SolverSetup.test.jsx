@@ -275,3 +275,26 @@ describe('BetSizeEditor', () => {
     expect(treeSummary()).toBe('Tree · 2 bet sizes · SPR 4.0');
   });
 });
+
+describe('EquityReadout', () => {
+  it('renders an exact equity table for two hands on a complete board', () => {
+    render(<Harness board={FULL_BOARD}
+      oopSide={{ kind: 'hand', cards: [c('A', 'h'), c('A', 'd')] }}
+      ipSide={{ kind: 'hand', cards: [c('K', 'h'), c('K', 'd')] }} />);
+    const eqCard = document.querySelector('.sv-equity-card');
+    expect(eqCard).not.toBeNull();
+    expect(within(eqCard).getByText('exact')).toBeInTheDocument();
+    const rows = eqCard.querySelectorAll('.sv-equity-table tbody tr');
+    expect(rows).toHaveLength(2);
+    const equities = [...eqCard.querySelectorAll('.sv-eq-equity')].map((td) => parseFloat(td.textContent));
+    expect(equities[0] + equities[1]).toBeCloseTo(100, 5);
+  });
+
+  it('shows the blocked-combo empty message when a hand is dead on the board', () => {
+    render(<Harness board={FULL_BOARD}
+      oopSide={{ kind: 'hand', cards: [c('2', 's'), c('7', 'h')] }}
+      ipSide={{ kind: 'hand', cards: [c('K', 'h'), c('K', 'd')] }} />);
+    expect(document.querySelector('.sv-equity-empty')).not.toBeNull();
+    expect(document.querySelector('.sv-equity-table')).toBeNull();
+  });
+});

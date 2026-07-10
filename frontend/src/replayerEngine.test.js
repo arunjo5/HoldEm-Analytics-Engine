@@ -452,3 +452,64 @@ describe('equity sanity (engine used by replayer)', () => {
     expect(flopHit).toBeGreaterThan(pre + 20);
   });
 });
+
+describe('label helpers', () => {
+  it('posLabel falls back to P{n} when a seat has no position', () => {
+    const setup = { seats: [{ pos: 'BTN' }, {}] };
+    expect(E.posLabel(setup, 0)).toBe('BTN');
+    expect(E.posLabel(setup, 1)).toBe('P2');
+  });
+
+  it('nameOrPos prefers the name, then the position, then P{n}', () => {
+    const setup = { seats: [{ name: 'Ada', pos: 'BTN' }, { name: '', pos: 'SB' }, {}] };
+    expect(E.nameOrPos(setup, 0)).toBe('Ada');
+    expect(E.nameOrPos(setup, 1)).toBe('SB');
+    expect(E.nameOrPos(setup, 2)).toBe('P3');
+  });
+});
+
+describe('live actor counting', () => {
+  it('liveActorCount excludes folded and all-in players while activeCount does not', () => {
+    const setup = mkSetup(4, { stack: 100 });
+    const st = E.initState(setup);
+    E.applyAction(st, { seat: 3, type: 'raise', amount: 100 }); // UTG jams all-in
+    E.applyAction(st, { seat: 0, type: 'fold' });               // BTN folds
+    expect(E.activeCount(st)).toBe(3);      // seats 1, 2, 3 still in the hand
+    expect(E.liveActorCount(st)).toBe(2);   // seat 3 all-in and seat 0 folded are excluded
+  });
+});
+
+describe('legalOptions call-only boundary', () => {
+  it('facing a bet with a stack equal to the amount owed allows a call but not a raise', () => {
+    const setup = mkSetup(2);
+    setup.seats[1].stack = 10; // posts bb 2, leaving 8 behind
+    const st = E.initState(setup);
+    E.applyAction(st, { seat: 0, type: 'raise', amount: 10 }); // owe becomes 8 = remaining stack
+    const o = E.legalOptions(st, setup);
+    expect(o.seat).toBe(1);
+    expect(o.canCall).toBe(true);
+    expect(o.callAmt).toBe(8);
+    expect(o.canRaise).toBe(false);
+    expect(o.maxTo).toBe(10);
+  });
+});
+
+describe('multi-way checked-down showdown', () => {
+  it('a limped, checked-down 3-way hand deals every street and reaches showdown', () => {
+    const setup = mkSetup(3, { cards: { 0: 'AsKs', 1: 'QhQd', 2: '7c2d' } });
+    const actions = [
+      { seat: 0, type: 'call', street: 0 }, { seat: 1, type: 'call', street: 0 }, { seat: 2, type: 'check', street: 0 },
+      { seat: 1, type: 'check', street: 1 }, { seat: 2, type: 'check', street: 1 }, { seat: 0, type: 'check', street: 1 },
+      { seat: 1, type: 'check', street: 2 }, { seat: 2, type: 'check', street: 2 }, { seat: 0, type: 'check', street: 2 },
+      { seat: 1, type: 'check', street: 3 }, { seat: 2, type: 'check', street: 3 }, { seat: 0, type: 'check', street: 3 },
+    ];
+    const f = E.buildReplay(setup, actions, C('2h7d9cThJs'));
+    expect(f.filter(x => x.kind === 'deal').map(d => d.boardDealt)).toEqual([3, 4, 5]);
+    const last = f.at(-1);
+    expect(last.kind).toBe('action');
+    expect(last.handOver).toBe(false); // showdown reached, nobody folded out
+    expect(last.folded.filter(Boolean)).toHaveLength(0); // all three still in at showdown
+    expect(last.boardDealt).toBe(5);
+    expect(last.pot).toBe(6); // BTN completes to 2, SB completes, BB checks
+  });
+});

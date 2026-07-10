@@ -150,6 +150,12 @@ body {
 .stage.compact .felt { inset: 36px 18px; }
 .stage.compact .board { gap: 6px; }
 .stage.compact .board-label { top: calc(50% + 50px); max-width: 320px; text-align: center; }
+/* compact plates: drop the W/T microtext, slim the chrome */
+.stage.compact .seat-equity-row.sub { display: none; }
+.stage.compact .seat-wrap { width: 132px; }
+.stage.compact .range-mini { gap: 7px; }
+.stage.compact .seat { padding: 5px 6px 6px; gap: 3px; }
+.stage.compact .seat-body { padding: 6px 4px; }
 
 /* Board cards row */
 .board-remove-btn {
@@ -196,7 +202,7 @@ body {
 }
 .board-strip-btn { background: transparent; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; transition: transform 0.15s ease; }
 .board-strip-btn:not(:disabled):hover { transform: translateY(-1px); }
-.board-strip-btn:disabled { cursor: default; opacity: 0.45; }
+.board-strip-btn:disabled { cursor: default; opacity: 0.7; }
 .board-flop-cards { display: inline-flex; gap: 3px; align-items: center; }
 .board-label {
   position: absolute;
@@ -311,22 +317,29 @@ body {
   transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Range mini thumbnail in seat */
-.range-mini { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+/* Range mini thumbnail in seat — grid matches hole-card height (68px) so
+   hand plates and range plates share one footprint */
+.range-mini { display: flex; align-items: center; gap: 9px; }
 .range-mini-grid {
   display: grid;
-  grid-template-columns: repeat(13, 5px);
-  grid-template-rows: repeat(13, 5px);
+  grid-template-columns: repeat(13, 4px);
+  grid-template-rows: repeat(13, 4px);
   gap: 1px;
   background: rgba(255,255,255,0.04);
   padding: 2px;
   border-radius: 4px;
 }
-.rmc { width: 5px; height: 5px; background: rgba(255,255,255,0.06); border-radius: 1px; }
+.rmc { width: 4px; height: 4px; background: rgba(255,255,255,0.06); border-radius: 1px; }
 .rmc.on.pair { background: var(--gold); }
 .rmc.on.suited { background: var(--blue); }
 .rmc.on.offsuit { background: rgba(255,255,255,0.65); }
-.range-mini-label { font-size: 10px; color: var(--text-dim); letter-spacing: 0.02em; }
+.range-mini-meta { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.range-mini-count { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.range-mini-unit { font-size: 8.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; }
+/* light theme: white-based cells vanish on the cream plate */
+.light .range-mini-grid { background: rgba(0,0,0,0.05); }
+.light .rmc { background: rgba(0,0,0,0.07); }
+.light .rmc.on.offsuit { background: rgba(60,50,35,0.55); }
 
 /* ── Picker (Card + Range) ───────────────────── */
 .picker-overlay {
@@ -448,6 +461,10 @@ body {
   cursor: not-allowed;
   background: var(--card-face-dim);
 }
+/* light theme: card-face is nearly the modal bg — give faces real edges */
+.light .pcard { background: #fff; border-color: rgba(0,0,0,0.10); box-shadow: 0 1px 2px rgba(0,0,0,0.07); }
+.light .pcard:hover:not(:disabled) { border-color: var(--gold-dim); }
+.light .pcard.used, .light .pcard:disabled { background: var(--card-face-dim); box-shadow: none; }
 .pcard.selected {
   box-shadow: 0 0 0 2px var(--gold);
   transform: translateY(-2px);
@@ -631,7 +648,8 @@ body {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: var(--gold); color: #1a1208; border-color: var(--gold); font-weight: 600; }
 .btn-primary:hover:not(:disabled) { background: #d4b377; }
-.btn-primary:disabled { background: var(--gold-soft); border-color: transparent; color: var(--gold-dim); }
+.btn-primary:disabled { background: var(--gold-soft); border-color: transparent; color: var(--gold-dim); opacity: 0.75; }
+.light .btn-primary:disabled { color: rgba(140,105,50,0.6); }
 .btn-ghost { background: transparent; }
 .btn-danger { color: var(--red); }
 .btn-icon { padding: 8px; width: 32px; height: 32px; justify-content: center; }
@@ -743,6 +761,7 @@ body {
   transition: all 0.15s ease;
 }
 .icon-btn:hover { background: var(--bg-elev-2); border-color: var(--border-2); }
+.icon-btn svg { display: block; }
 
 /* Range vs Range global toggle */
 .toolbar {
@@ -893,6 +912,7 @@ body {
   top: calc(100% + 6px);
   right: 0;
   min-width: 220px;
+  max-width: calc(100vw - 16px);
   background: var(--bg-elev);
   border: 1px solid var(--border-2);
   border-radius: 10px;
@@ -1610,12 +1630,19 @@ body {
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.replayer-header-right {
+.replayer-header-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
 }
+.replayer-header-account {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.replayer-header-actions ~ .replayer-header-account { margin-left: 0; }
 
 .replayer-body {
   flex: 1;
@@ -1649,12 +1676,15 @@ body {
 .replay-table .felt { position: absolute; inset: 76px 98px; border-radius: 50%/50%; background: var(--felt); }
 .replay-table.compact .felt-rim { inset: 22px 6px; }
 .replay-table.compact .felt { inset: 32px 16px; }
-.replay-table.crowded .replay-seat { gap: 3px; }
+.replay-table.crowded .replay-seat { gap: 3px; width: 110px; }
 .replay-table.crowded .replay-seat-plate { padding: 3px 6px; min-width: 0; max-width: 104px; }
 .replay-table.crowded .replay-seat-top { gap: 4px; margin-bottom: 2px; }
 .replay-table.crowded .replay-seat-name { max-width: 44px; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .replay-table.crowded .replay-seat-pos { font-size: 7px; padding: 2px 3px; min-width: 0; }
 .replay-table.crowded .replay-stack-num { font-size: 9px; }
+.replay-table.crowded .replay-bet { font-size: 11px; padding: 2px 8px; gap: 5px; }
+.replay-table.crowded .replay-bet-dot { width: 7px; height: 7px; }
+.replay-table.crowded .replay-dealer-btn { width: 17px; height: 17px; font-size: 9px; top: -7px; right: -7px; }
 .replay-table .felt::before {
   content: ''; position: absolute; inset: 14px; border-radius: 50%/50%;
   border: 1px solid rgba(255,255,255,0.05);
@@ -1671,6 +1701,9 @@ body {
   gap: 12px;
   z-index: 4;
 }
+/* portrait stage: smaller board + nudged center so a 5-card river slots
+   between the upper plates and the lower seats' cards */
+.replay-table.compact .replay-center { top: 46%; gap: 8px; }
 .replay-pot {
   display: inline-flex;
   align-items: center;
@@ -1703,23 +1736,29 @@ body {
   border: 1.5px dashed rgba(255,255,255,0.16);
   background: rgba(0,0,0,0.10);
 }
-/* Run it twice — two stacked, smaller board rows */
+/* Run it twice — two stacked board rows */
 .replay-boards-twice {
   display: flex;
   flex-direction: column;
   gap: 9px;
 }
-.replay-board.twice {
+/* .small = any sub-desktop row (compact single board + run-twice rows) */
+.replay-board.small {
   position: relative;
   gap: 6px;
   min-height: 75px;
 }
-.replay-board.twice.pending { opacity: 0.4; transition: opacity 0.25s ease; }
-.replay-board.twice .replay-board-empty {
+.replay-board.small.pending { opacity: 0.4; transition: opacity 0.25s ease; }
+.replay-board.small .replay-board-empty {
   width: 55px;
   height: 75px;
   border-radius: 6px;
 }
+/* empty slots track the card size in play */
+.replay-board.sz-md { min-height: 68px; }
+.replay-board.sz-md .replay-board-empty { width: 50px; height: 68px; }
+.replay-board.sz-bd { min-height: 58px; }
+.replay-board.sz-bd .replay-board-empty { width: 42px; height: 58px; border-radius: 5px; }
 .replay-run-tag {
   position: absolute;
   right: calc(100% + 12px);
@@ -1754,6 +1793,7 @@ body {
 .replay-seat.folded { opacity: 0.4; }
 .replay-seat-cards { display: flex; gap: 5px; }
 .replay-seat-plate {
+  position: relative; /* anchors the dealer chip */
   width: 100%;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0)) ,
@@ -1878,9 +1918,9 @@ body {
   box-shadow: 0 0 0 1.5px rgba(0,0,0,0.3);
 }
 .replay-dealer-btn {
-  position: absolute;
-  top: -6px;
-  right: -2px;
+  position: absolute; /* pinned to the plate's top-right corner */
+  top: -8px;
+  right: -8px;
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -1891,7 +1931,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 2px 5px rgba(0,0,0,0.4);
+  z-index: 1;
 }
 
 /* Transport bar */
@@ -1998,9 +2039,11 @@ body {
 .bt-felt::before { content: ''; position: absolute; inset: 12px; border-radius: 50%/50%; border: 1px solid rgba(255,255,255,0.05); }
 .bt-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 7px; z-index: 2; }
 .bt-pot { display: inline-flex; gap: 6px; align-items: center; background: rgba(0,0,0,0.28); border-radius: 999px; padding: 4px 12px; font-family: var(--font-mono); font-size: 11px; color: #e8e2d5; }
+/* echo the replay pot pill: small caps label, gold number */
+.bt-pot span { font-size: 8.5px; letter-spacing: 0.16em; font-weight: 700; color: rgba(244,241,234,0.55); }
 .bt-pot b { color: var(--gold); font-weight: 600; }
 .bt-board { display: flex; gap: 4px; align-items: center; }
-.bt-street { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+.bt-street { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600; color: rgba(244,241,234,0.45); }
 .bt-seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 3; }
 .bt-seat.folded { opacity: 0.42; }
 .bt-plate {
@@ -2036,8 +2079,9 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
+.builder-head-btns { display: flex; gap: 8px; }
 .builder-title {
   font-family: var(--font-ui);
   font-size: 17px;
@@ -2146,25 +2190,31 @@ body {
 }
 .builder-cards-btn.has { border-style: solid; border-color: var(--gold-dim); }
 .builder-cards-empty { font-size: 11px; color: var(--text-dim); }
+.builder-cards-slot { position: relative; display: inline-flex; flex-shrink: 0; }
+/* corner ×, same pattern as the board-card remove button */
 .builder-cards-clear {
-  width: 22px; height: 22px;
-  border-radius: 5px; border: none;
-  background: transparent; color: var(--text-faint);
-  cursor: pointer; font-size: 15px;
+  position: absolute; top: -7px; right: -7px;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1px solid var(--border-2);
+  background: var(--bg-elev-2); color: var(--text);
+  cursor: pointer; font-size: 12px; line-height: 1; font-weight: 600;
+  transition: color 0.12s ease, border-color 0.12s ease;
 }
-.builder-cards-clear:hover { color: var(--red); background: rgba(216,70,62,0.08); }
-.builder-hint { font-size: 11px; color: var(--text-faint); margin-top: 10px; line-height: 1.5; }
+.builder-cards-clear:hover { color: var(--red); border-color: rgba(216,70,62,0.5); }
+.light .builder-cards-clear { background: #fff; border-color: rgba(0,0,0,0.25); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.builder-hint { font-size: 11.5px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
 
 .builder-foot {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  margin-top: 22px;
+  margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
-.builder-foot-note { font-size: 11.5px; color: var(--text-faint); margin-right: auto; }
+.builder-foot-note { font-size: 11.5px; color: var(--text-dim); margin-right: auto; }
 .builder-cards-btn.missing { border-color: var(--gold-dim); background: var(--gold-soft); }
 .builder-cards-btn.missing .builder-cards-empty { color: var(--gold); }
 
@@ -2330,7 +2380,7 @@ body {
   .builder-action-btns > .act-btn { width: 100%; padding: 0; }
   .builder-bet-group { grid-column: 1 / -1; min-width: 0; width: 100%; }
   .builder-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .quick-btn { padding: 5px 4px; }
+  .quick-btn { padding: 6px 4px; min-height: 44px; justify-content: center; }
 
   .app { padding: 10px 10px 16px; gap: 10px; }
   /* row 1: brand (left) + account controls (theme · sign in) top-right;
@@ -2348,25 +2398,29 @@ body {
 
   .results { grid-template-columns: 1fr; gap: 14px; padding: 14px 14px 18px; margin-top: 14px; }
   .results-empty { padding: 14px 0 !important; }
-  /* smaller range thumbnail in seats so range-mode seats are shorter (less overlap) */
-  .range-mini-grid { grid-template-columns: repeat(13, 4px); grid-template-rows: repeat(13, 4px); }
-  .range-mini-label { font-size: 9px; }
+  /* the table scrolls inside its panel instead of stretching the page */
+  .results > div:first-child { overflow-x: auto; min-width: 0; }
+  .results-table td { font-size: 12px; white-space: nowrap; }
   .results-table .equity-cell { width: 76px; }
   .results-table th { font-size: 9.5px; letter-spacing: 0.02em; white-space: nowrap; }
-  .results-table td { font-size: 12px; }
   .results-table .player-cell { white-space: nowrap; }
   .pot-odds { min-width: 0; }
 
   .picker-overlay { padding: 6px; align-items: flex-start; }
   .picker { max-height: calc(100dvh - 12px); }
+  /* card pickers fill the screen for tap height; the range picker keeps its own */
+  .picker:not(:has(.rg-grid)) { height: calc(100dvh - 12px); }
   .picker-head { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
   .picker-foot { padding: 10px 14px; }
-  /* rotate to 4 suit columns x 13 rank rows — bigger, easier tap targets, fills the height */
-  .picker-grid { padding: 8px; flex: 1 1 auto; flex-direction: row; gap: 8px; }
+  /* rotate to 4 suit columns x 13 rank rows */
+  .picker-grid { padding: 10px 8px; flex: 1 1 auto; flex-direction: row; gap: 9px; }
   .picker-row { grid-template-columns: 1fr; grid-auto-rows: 1fr; flex: 1 1 0; gap: 5px; }
-  .pcard { height: auto; min-height: 0; border-radius: 6px; gap: 2px; }
-  .pcard svg { width: 14px; height: 14px; }
-  .pcard-rank { font-size: 15px; }
+  /* rank + suit inline, like a card corner */
+  .pcard { height: auto; min-height: 0; border-radius: 7px; flex-direction: row; gap: 7px; align-items: center; justify-content: center; }
+  .pcard svg { width: 15px; height: 15px; }
+  .pcard-rank { font-size: 17px; width: auto; }
+  .pcard-rank.is-ten { letter-spacing: -0.06em; }
+  .pcard-suit { width: auto; }
   .rg-grid { gap: 3px; }
   .rg-cell { font-size: 8px; }
 
@@ -2374,17 +2428,34 @@ body {
   .drawer { width: 100vw; max-width: 100vw; }
 
   .replayer-header { flex-wrap: wrap; row-gap: 8px; padding: 10px 12px; gap: 10px; }
-  .replayer-header-right { flex-basis: 100%; display: flex; gap: 6px; }
-  .replayer-header-right .btn { flex: 1 1 0; justify-content: center; min-width: 0; }
+  /* actions wrap into a full-width segmented row; account stays pinned top-right
+     so the dropdown never hangs off the left edge */
+  .replayer-header-actions { flex-basis: 100%; order: 10; gap: 6px; }
+  .replayer-header-actions .btn { flex: 1 1 0; justify-content: center; min-width: 0; }
+  .replayer-header-account { margin-left: auto; }
   .replayer-body { padding: 10px; }
 
-  .builder { padding: 14px 12px 16px; }
-  .builder-stakes { flex-wrap: wrap; }
-  .builder-field { flex: 1 1 40%; min-width: 0; }
+  .replayer-builder-wrap { padding: 12px 10px 48px; }
+  .builder { padding: 16px 12px 18px; }
+  /* stakes: three even columns instead of 2 + full-width ante */
+  .builder-stakes { gap: 8px; }
+  .builder-field { flex: 1 1 0; min-width: 0; }
   .builder-field input { width: 100%; min-width: 0; }
-  .builder-seat-row { flex-wrap: wrap; row-gap: 6px; }
-  .builder-seat-name { min-width: 50px; }
-  .builder-seat-stack input { width: 58px; }
+  /* player count: one even segmented row of 2–9 */
+  .builder-count { flex-wrap: nowrap; gap: 5px; }
+  .builder-count-btn { flex: 1 1 0; width: auto; min-width: 0; height: 36px; }
+  .builder-seat-row { flex-wrap: wrap; row-gap: 6px; gap: 7px; padding: 7px 8px; }
+  .builder-seat-name { min-width: 50px; padding: 5px 6px; }
+  .builder-seat-stack input { width: 56px; }
+  .builder-acting { flex-wrap: wrap; row-gap: 6px; }
+
+  /* transport: full-width segmented controls, bigger touch targets */
+  .replay-transport { gap: 10px; }
+  .replay-controls { width: 100%; padding: 7px 8px; }
+  .replay-ctrl { flex: 1 1 0; width: auto; min-width: 0; height: 40px; }
+  .replay-step-count { flex: 0 0 auto; min-width: 56px; }
+  .replay-action-readout { flex-wrap: wrap; justify-content: center; row-gap: 4px; padding: 0 4px; text-align: center; }
+  .replay-action-label { font-size: 13px; }
 }
 
 @media (max-width: 540px) {

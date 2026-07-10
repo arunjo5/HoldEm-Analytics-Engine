@@ -29,7 +29,7 @@ function BoardDealModal({ street, need, used, onConfirm, onCancel }) {
             <div className="picker-title">Deal {street}</div>
             <div className="picker-sub">{cards.length} / {need} card{need === 1 ? '' : 's'} selected</div>
           </div>
-          <div className="picker-selected" style={{ display: 'flex', gap: 6 }}>
+          <div className="picker-selected">
             {Array.from({ length: need }).map((_, i) => (cards[i] ? <PlayingCard key={i} card={cards[i]} size="sm" /> : <EmptyCardSlot key={i} size="sm" label="" />))}
           </div>
         </div>
@@ -98,7 +98,7 @@ function SidePickerModal({ side, label, used, initialMode, onCancel, onSave }) {
         </div>
         {mode === 'hand' ? (
           <>
-            <div style={{ padding: '14px 20px 0', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            <div className="sv-hand-sel-row">
               {Array.from({ length: 2 }).map((_, i) => (cards[i] ? <PlayingCard key={i} card={cards[i]} size="sm" /> : <EmptyCardSlot key={i} size="sm" label="" />))}
             </div>
             <HandCardGrid used={used} selected={cards} onToggle={toggleCard} />
@@ -258,7 +258,7 @@ function EquityReadout({ oopSide, ipSide, board }) {
   if (!eq.hero) {
     return (
       <div className="sv-equity-card">
-        <div className="sv-equity-head"><div className="sv-field-label" style={{ margin: 0 }}>Equity</div></div>
+        <div className="sv-equity-head"><div className="sv-field-label">Equity</div></div>
         <div className="sv-equity-empty">All combos are blocked by the board or the opposing hand — nothing to run.</div>
       </div>
     );
@@ -270,7 +270,7 @@ function EquityReadout({ oopSide, ipSide, board }) {
   return (
     <div className="sv-equity-card">
       <div className="sv-equity-head">
-        <div className="sv-field-label" style={{ margin: 0 }}>Equity</div>
+        <div className="sv-field-label">Equity</div>
         <div className="sv-equity-meta">
           <span className={'sv-method ' + eq.method}>{eq.method === 'exact' ? 'exact' : 'simulated'}</span>
           {eq.method === 'simulated' && <span className="sv-equity-samples">{(eq.samples / 1000).toFixed(0)}k runouts</span>}
@@ -345,11 +345,8 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
           </div>
         </div>
         <div className="sv-setup-right">
+          <div className="sv-section-label">Spot configuration</div>
           <div className="sv-config-card">
-            <div className="sv-config-head">
-              <div className="sv-config-title">Spot configuration</div>
-              <div className="sv-config-sub">Each side can be a specific hand or a range</div>
-            </div>
             <div className="sv-field">
               <div className="sv-field-label sv-board-label">
                 <span>Board <span className="sv-field-hint">complete 5-card river</span></span>
@@ -360,12 +357,15 @@ export function SetupView({ spot, setSpot, board, setBoard, oopSide, setOopSide,
               </div>
             </div>
             <div className="sv-divider" />
-            <SideRow side={oopSide} label="OOP" onEdit={(mode) => setSideEdit({ which: 'OOP', mode })} />
-            <SideRow side={ipSide} label="IP" onEdit={(mode) => setSideEdit({ which: 'IP', mode })} />
+            <div className="sv-field sv-players-field">
+              <div className="sv-field-label">Players <span className="sv-field-hint">each side can be a specific hand or a range</span></div>
+              <SideRow side={oopSide} label="OOP" onEdit={(mode) => setSideEdit({ which: 'OOP', mode })} />
+              <SideRow side={ipSide} label="IP" onEdit={(mode) => setSideEdit({ which: 'IP', mode })} />
+            </div>
             <div className="sv-divider" />
             <div className="sv-num-grid">
-              <NumField label="Pot size" hint="bb" value={spot.pot} suffix="bb" onChange={(v) => setSpot((s) => ({ ...s, pot: v }))} />
-              <NumField label="Effective stack" hint="bb" value={spot.stack} suffix="bb" onChange={(v) => setSpot((s) => ({ ...s, stack: v }))} />
+              <NumField label="Pot size" value={spot.pot} suffix="bb" onChange={(v) => setSpot((s) => ({ ...s, pot: v }))} />
+              <NumField label="Effective stack" value={spot.stack} suffix="bb" onChange={(v) => setSpot((s) => ({ ...s, stack: v }))} />
             </div>
             <BetSizeEditor spot={spot} setSpot={setSpot} />
             <div className="sv-solve-row">

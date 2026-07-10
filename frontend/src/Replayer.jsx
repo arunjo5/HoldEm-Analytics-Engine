@@ -216,9 +216,9 @@ function ReplaySeat({ pos, seat, setup, frame, equity, isActing, isWinner, resul
             <span className="replay-eq-num">{eqPct.toFixed(0)}%</span>
           </div>
         )}
+        {seat === 0 && <span className="replay-dealer-btn" title="Dealer">D</span>}
       </div>
       <BetChip amount={frame.streetContrib[seat]} money={money} />
-      {seat === 0 && <span className="replay-dealer-btn" title="Dealer">D</span>}
     </div>
   );
 }
@@ -241,9 +241,10 @@ function buildRunTwiceFrames(base, runResults) {
 
 // One community-card row. `dim` marks a run that hasn't been dealt out yet.
 function BoardRow({ cards, vis, size, label, dim }) {
-  const twice = size === 'mdr';
+  const small = size !== 'lgr';
+  const cls = 'replay-board' + (small ? ' small' : '') + (size === 'md' || size === 'bd' ? ' sz-' + size : '') + (dim ? ' pending' : '');
   return (
-    <div className={'replay-board' + (twice ? ' twice' : '') + (dim ? ' pending' : '')}>
+    <div className={cls}>
       {label && <span className="replay-run-tag">{label}</span>}
       {Array.from({ length: 5 }).map((_, i) => (
         i < vis && cards[i]
@@ -279,11 +280,11 @@ function ReplayTableBody({ setup, board, board2, frame, equity, winners, resultW
           </div>
           {frame.twice ? (
             <div className="replay-boards-twice">
-              <BoardRow cards={board} vis={frame.run1Dealt} size={compact ? 'md' : 'mdr'} label="RUN 1" />
-              <BoardRow cards={board2} vis={frame.run2Dealt} size={compact ? 'md' : 'mdr'} label="RUN 2" dim={frame.activeRun < 2} />
+              <BoardRow cards={board} vis={frame.run1Dealt} size={compact ? (crowded ? 'bd' : 'md') : 'mdr'} label="RUN 1" />
+              <BoardRow cards={board2} vis={frame.run2Dealt} size={compact ? (crowded ? 'bd' : 'md') : 'mdr'} label="RUN 2" dim={frame.activeRun < 2} />
             </div>
           ) : (
-            <BoardRow cards={board} vis={frame.boardDealt} size={compact ? 'mdr' : 'lgr'} />
+            <BoardRow cards={board} vis={frame.boardDealt} size={compact ? (crowded ? 'bd' : 'md') : 'lgr'} />
           )}
           <div className="replay-street-tag">{frame.streetName}</div>
         </div>
@@ -317,7 +318,9 @@ function TransportBar({ idx, total, frame, onFirst, onPrev, onNext, onLast }) {
         <span className="replay-action-label">{frame.label}</span>
       </div>
       <div className="replay-controls">
-        <button className="replay-ctrl" onClick={onFirst} disabled={idx === 0} aria-label="First" title="First (Home)">⏮</button>
+        <button className="replay-ctrl" onClick={onFirst} disabled={idx === 0} aria-label="First" title="First (Home)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5H5v14h2z" /><path d="M18 5v14l-9-7z" /></svg>
+        </button>
         <button className="replay-ctrl" onClick={onPrev} disabled={idx === 0} aria-label="Back" title="Back (←)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 5v14l-9-7z" /></svg>
         </button>
@@ -325,7 +328,9 @@ function TransportBar({ idx, total, frame, onFirst, onPrev, onNext, onLast }) {
         <button className="replay-ctrl" onClick={onNext} disabled={idx >= total - 1} aria-label="Forward" title="Forward (→)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 5v14l9-7z" /></svg>
         </button>
-        <button className="replay-ctrl" onClick={onLast} disabled={idx >= total - 1} aria-label="Last" title="Last (End)">⏭</button>
+        <button className="replay-ctrl" onClick={onLast} disabled={idx >= total - 1} aria-label="Last" title="Last (End)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 5h2v14h-2z" /><path d="M6 5v14l9-7z" /></svg>
+        </button>
       </div>
     </div>
   );
@@ -642,17 +647,19 @@ function HandBuilder({ onComplete, onCancel }) {
                     onChange={e => setSeats(prev => prev.map((x, j) => j === i ? { ...x, stack: e.target.value } : x))}
                   />
                 </label>
-                <button
-                  className={'builder-cards-btn' + (s.cards ? ' has' : ' missing')}
-                  onClick={() => setCardTarget(i)}
-                >
-                  {s.cards
-                    ? s.cards.map((c, k) => <PlayingCard key={k} card={c} size="xs" />)
-                    : <span className="builder-cards-empty">+ cards</span>}
-                </button>
-                {s.cards && (
-                  <button className="builder-cards-clear" onClick={() => setSeats(prev => prev.map((x, j) => j === i ? { ...x, cards: null } : x))} aria-label="Clear cards">×</button>
-                )}
+                <span className="builder-cards-slot">
+                  <button
+                    className={'builder-cards-btn' + (s.cards ? ' has' : ' missing')}
+                    onClick={() => setCardTarget(i)}
+                  >
+                    {s.cards
+                      ? s.cards.map((c, k) => <PlayingCard key={k} card={c} size="xs" />)
+                      : <span className="builder-cards-empty">+ cards</span>}
+                  </button>
+                  {s.cards && (
+                    <button className="builder-cards-clear" onClick={() => setSeats(prev => prev.map((x, j) => j === i ? { ...x, cards: null } : x))} aria-label="Clear cards">×</button>
+                  )}
+                </span>
               </div>
             ))}
           </div>
@@ -692,7 +699,7 @@ function HandBuilder({ onComplete, onCancel }) {
           <div className="builder-title">Enter action · {ReplayEngine.STREET_NAMES[currentStreet]}</div>
           <div className="builder-sub">{actions.length} action{actions.length === 1 ? '' : 's'} recorded · pot {live ? fmt(live.pot) : 0}</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="builder-head-btns">
           <button className="btn btn-ghost" onClick={() => setPhase('setup')}>← Setup</button>
           <button className="btn btn-ghost" onClick={undo} disabled={actions.length === 0}>Undo</button>
         </div>
@@ -728,7 +735,7 @@ function HandBuilder({ onComplete, onCancel }) {
         <div className="builder-action-panel">
           <div className="builder-acting">
             Action on <strong>{ReplayEngine.nameOrPos(setup, opts.seat)}</strong>
-            <span className="builder-acting-pos">{setup.seats[opts.seat].pos}</span>
+            {setup.seats[opts.seat].name ? <span className="builder-acting-pos">{setup.seats[opts.seat].pos}</span> : null}
             {opts.toCall > opts.streetContrib && <span className="builder-tocall">to call {fmt(opts.callAmt)}</span>}
           </div>
           <div className="builder-action-btns">
@@ -825,7 +832,7 @@ function makeSeats(n, bb) {
 }
 
 // Top-level: builder → playback.
-export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavorite, userMenu, historyDrawer }) {
+export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavorite, userMenu, themeToggle, historyDrawer }) {
   const [hand, setHand] = useState(initialHand || null); // { setup, actions, board }
   const [idx, setIdx] = useState(0);
   const [savedId, setSavedId] = useState((initialHand && initialHand.savedId) || null);
@@ -941,10 +948,17 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
     setShowShare(true);
   }
 
+  const accountEl = (
+    <>
+      {themeToggle}
+      {userMenu}
+    </>
+  );
+
   if (!hand) {
     return (
       <div className="replayer">
-        <ReplayerHeader onExit={onExit} title="Hand Replayer" right={userMenu} />
+        <ReplayerHeader onExit={onExit} title="Hand Replayer" account={accountEl} />
         <div className="replayer-builder-wrap">
           <HandBuilder onComplete={handleComplete} onCancel={onExit} />
         </div>
@@ -958,7 +972,8 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
       <ReplayerHeader
         onExit={onExit}
         title="Hand Replayer"
-        right={
+        account={accountEl}
+        actions={
           <>
             <button className="btn btn-ghost btn-share" onClick={openShare} title="Share this hand via link">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -975,8 +990,6 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
             >
               {favorited ? '✓ Favorited' : 'Favorite'}
             </button>
-            {userMenu && <span className="topbar-divider" />}
-            {userMenu}
           </>
         }
       />
@@ -1008,7 +1021,9 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
   );
 }
 
-function ReplayerHeader({ onExit, title, right }) {
+// actions and account render in separate containers so phones can wrap the
+// actions row while the account menu stays pinned on-screen
+function ReplayerHeader({ onExit, title, actions, account }) {
   return (
     <div className="replayer-header">
       <button className="btn btn-ghost replayer-back" onClick={onExit}>
@@ -1021,7 +1036,8 @@ function ReplayerHeader({ onExit, title, right }) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4" /></svg>
         {title}
       </span>
-      <div className="replayer-header-right">{right}</div>
+      {actions && <div className="replayer-header-actions">{actions}</div>}
+      <div className="replayer-header-account">{account}</div>
     </div>
   );
 }

@@ -103,18 +103,21 @@ describe('grid layouts', () => {
     expect(off.className).toContain('empty');
   });
 
-  it('dominant layout colors the cell by dominant action with weighted opacity', () => {
+  const tintOf = (key) => cellOf(key).querySelector('.sv-cell-tint');
+
+  it('dominant layout tints the cell by dominant action with weighted opacity, label stays solid', () => {
     renderResults();
     fireEvent.click(screen.getByRole('button', { name: 'Dominant' }));
     const node = result.nodes[0];
     const g = result.nodeSolves.oop_first.byKey.AA;
     const domA = node.actions.find((a) => a.id === g.dominant);
-    const cell = cellOf('AA');
-    expect(cell.style.opacity).toBe(String(0.32 + 0.68 * (g.agg[g.dominant] || 0)));
-    expect(cell.style.backgroundColor).toBe(rgbOf(actionColor(domA)));
+    const tint = tintOf('AA');
+    expect(tint.style.opacity).toBe(String(0.32 + 0.68 * (g.agg[g.dominant] || 0)));
+    expect(tint.style.backgroundColor).toBe(rgbOf(actionColor(domA)));
+    expect(cellOf('AA').style.opacity).toBe('');
   });
 
-  it('heat layout defaults focus to the first bet action and scales opacity', () => {
+  it('heat layout defaults focus to the first bet action and scales tint opacity', () => {
     renderResults();
     fireEvent.click(screen.getByRole('button', { name: 'Heat' }));
     const node = result.nodes[0];
@@ -123,7 +126,7 @@ describe('grid layouts', () => {
     const bet = node.actions.find((a) => a.kind === 'bet');
     expect(document.querySelector('.sv-heat-opt.active').textContent).toBe(bet.label);
     const g = result.nodeSolves.oop_first.byKey.AA;
-    expect(cellOf('AA').style.opacity).toBe(String(0.06 + 0.94 * (g.agg[bet.id] || 0)));
+    expect(tintOf('AA').style.opacity).toBe(String(0.06 + 0.94 * (g.agg[bet.id] || 0)));
   });
 
   it('heat focus falls back to the node default when the action is missing', () => {
@@ -136,7 +139,7 @@ describe('grid layouts', () => {
     const node = result.nodes[2];
     const s = result.nodeSolves[node.id];
     const key = Object.keys(s.byKey)[0];
-    expect(cellOf(key).style.opacity).toBe(String(0.06 + 0.94 * (s.byKey[key].agg.call || 0)));
+    expect(tintOf(key).style.opacity).toBe(String(0.06 + 0.94 * (s.byKey[key].agg.call || 0)));
   });
 });
 
@@ -178,5 +181,54 @@ describe('combo drill-in', () => {
     node.actions.forEach((a, i) => {
       expect(rows[i].querySelector('.sv-freq-val').textContent).toBe((((agg[a.id] || 0) / total) * 100).toFixed(1) + '%');
     });
+  });
+});
+
+describe('grid cell layer structure', () => {
+  it('a strategy cell is a button with a fill layer, an "over" label, and no tint', () => {
+    renderResults();
+    const cell = cellOf('AA');
+    expect(cell.tagName).toBe('BUTTON');
+    expect(cell.querySelector('.sv-cell-fill')).not.toBeNull();
+    expect(cell.querySelector('.sv-cell-tint')).toBeNull();
+    expect(cell.querySelector('.sv-cell-label').className).toContain('over');
+    expect(cell.style.opacity).toBe('');
+    expect(cell.className).not.toContain('solid');
+  });
+
+  it('dominant and heat cells carry a tint layer, a plain label, and the solid modifier', () => {
+    renderResults();
+    fireEvent.click(screen.getByRole('button', { name: 'Dominant' }));
+    let cell = cellOf('AA');
+    expect(cell.querySelector('.sv-cell-tint')).not.toBeNull();
+    expect(cell.querySelector('.sv-cell-fill')).toBeNull();
+    expect(cell.querySelector('.sv-cell-label').className).not.toContain('over');
+    expect(cell.className).toContain('solid');
+    fireEvent.click(screen.getByRole('button', { name: 'Heat' }));
+    cell = cellOf('AA');
+    expect(cell.querySelector('.sv-cell-tint')).not.toBeNull();
+    expect(cell.querySelector('.sv-cell-fill')).toBeNull();
+    expect(cell.style.opacity).toBe('');
+    expect(cell.className).toContain('solid');
+  });
+
+  it('switching Strategy back drops the tint and solid modifier again', () => {
+    renderResults();
+    fireEvent.click(screen.getByRole('button', { name: 'Dominant' }));
+    expect(cellOf('AA').querySelector('.sv-cell-tint')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Strategy' }));
+    const cell = cellOf('AA');
+    expect(cell.querySelector('.sv-cell-tint')).toBeNull();
+    expect(cell.querySelector('.sv-cell-fill')).not.toBeNull();
+    expect(cell.className).not.toContain('solid');
+  });
+
+  it('an empty cell is a non-interactive div with neither a fill nor a tint layer', () => {
+    renderResults();
+    const off = cellOf('72o');
+    expect(off.tagName).toBe('DIV');
+    expect(off.className).toContain('empty');
+    expect(off.querySelector('.sv-cell-fill')).toBeNull();
+    expect(off.querySelector('.sv-cell-tint')).toBeNull();
   });
 });

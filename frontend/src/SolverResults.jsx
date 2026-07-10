@@ -10,7 +10,8 @@ function GridCell({ r, c, g, node, layout, focusAction, selected, onSelect }) {
   const key = rangeKey(r, c);
   const kind = r === c ? 'pair' : r < c ? 'suited' : 'offsuit';
   if (!g) return <div className={'sv-cell empty ' + kind}><span className="sv-cell-label">{key}</span></div>;
-  let inner = null, style = {};
+  // tint lives on a child layer so a cold cell fades its color, not its label
+  let inner = null;
   if (layout === 'strategy') {
     inner = (
       <div className="sv-cell-fill">
@@ -20,14 +21,14 @@ function GridCell({ r, c, g, node, layout, focusAction, selected, onSelect }) {
   } else if (layout === 'dominant') {
     const domA = node.actions.find((a) => a.id === g.dominant);
     const f = g.agg[g.dominant] || 0;
-    style = { background: actionColor(domA), opacity: 0.32 + 0.68 * f };
+    inner = <div className="sv-cell-tint" style={{ background: actionColor(domA), opacity: 0.32 + 0.68 * f }} />;
   } else if (layout === 'heat') {
     const fa = node.actions.find((a) => a.id === focusAction) || node.actions[0];
     const f = g.agg[fa.id] || 0;
-    style = { background: actionColor(fa), opacity: 0.06 + 0.94 * f };
+    inner = <div className="sv-cell-tint" style={{ background: actionColor(fa), opacity: 0.06 + 0.94 * f }} />;
   }
   return (
-    <button className={'sv-cell ' + kind + (selected ? ' selected' : '') + (layout !== 'strategy' ? ' solid' : '')} style={style} onClick={() => onSelect(key)}>
+    <button className={'sv-cell ' + kind + (selected ? ' selected' : '') + (layout !== 'strategy' ? ' solid' : '')} onClick={() => onSelect(key)}>
       {inner}
       <span className={'sv-cell-label' + (layout === 'strategy' ? ' over' : '')}>{key}</span>
     </button>
@@ -109,6 +110,13 @@ function ComboDetail({ solve, node, selectedKey }) {
   );
 }
 
+// dark ink on pale action colors, white on the rest
+function chipInk(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = 0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255);
+  return lum > 160 ? '#42201b' : '#fff';
+}
+
 function StatCard({ label, value, sub, accent }) {
   return (
     <div className="sv-stat">
@@ -182,7 +190,8 @@ export function ResultsView({ spot, board, oopSide, ipSide, oopKeys, ipKeys, res
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" />
         </svg>
-        Exploitability is measured against your chosen <strong>{meta.sizeCount}-size bet tree</strong> — it only applies to those bet sizes, not the full continuous (all-sizings) game.
+        {/* keep in one div: bare text in a flex row splits into columns */}
+        <div>Exploitability is measured against your chosen <strong>{meta.sizeCount}-size bet tree</strong> — it only applies to those bet sizes, not the full continuous (all-sizings) game.</div>
       </div>
 
       <div className="sv-nodebar">
@@ -211,7 +220,7 @@ export function ResultsView({ spot, board, oopSide, ipSide, oopKeys, ipKeys, res
                 <div className="sv-heat-opts">
                   {node.actions.map((a) => (
                     <button key={a.id} className={'sv-heat-opt' + (activeFocus === a.id ? ' active' : '')} onClick={() => setFocusAction(a.id)}
-                      style={activeFocus === a.id ? { background: actionColor(a), borderColor: actionColor(a), color: '#fff' } : {}}>{a.label}</button>
+                      style={activeFocus === a.id ? { background: actionColor(a), borderColor: actionColor(a), color: chipInk(actionColor(a)) } : {}}>{a.label}</button>
                   ))}
                 </div>
               </div>

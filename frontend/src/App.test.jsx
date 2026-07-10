@@ -132,6 +132,23 @@ const readBlob = (blob) => new Promise((res, rej) => {
   fr.readAsText(blob);
 });
 
+// minimal convertible PokerNow log (empty events still yield a valid replay)
+const pnPlayer = (seat, id, name) => ({ seat, id, name, stack: 10000 });
+const pnHand = (n, players) => ({
+  number: String(n), gameType: 'th', dealerSeat: players[0].seat,
+  smallBlind: 50, bigBlind: 100, players, events: [],
+});
+const PN_AB = () => [pnPlayer(0, 'p_alice', 'alice'), pnPlayer(1, 'p_bob', 'bob')];
+const pnAbLog = (nums) => ({ playerId: 'p_alice', hands: nums.map((n) => pnHand(n, PN_AB())) });
+function dropPnLog(scope, log) {
+  const file = new File([JSON.stringify(log)], 'log.json', { type: 'application/json' });
+  fireEvent.change(scope.querySelector('input[type="file"]'), { target: { files: [file] } });
+}
+const enterHand = (input, v) => {
+  fireEvent.change(input, { target: { value: v } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+};
+
 beforeEach(() => {
   localStorage.clear();
   FakeWorker.instances = [];
@@ -541,6 +558,86 @@ describe('view switching and toolbar gating', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByLabelText('Toggle theme'));
     expect(document.documentElement.classList.contains('light')).toBe(true);
+  });
+
+  it('the calc theme toggle is an svg icon in both states, never a text glyph', () => {
+    renderApp();
+    const btn = screen.getByLabelText('Toggle theme');
+    expect(btn.querySelector('svg')).toBeInTheDocument();
+    expect(btn.textContent).toBe('');
+    fireEvent.click(btn); // light -> dark
+    expect(btn.querySelector('svg')).toBeInTheDocument();
+    expect(btn.textContent).toBe('');
+  });
+});
+
+describe('context-aware account menu', () => {
+  const openChipMenu = async () => { fireEvent.click(await findChip()); return document.querySelector('.user-menu'); };
+
+  it('the replayer menu keeps Import and Hand history but drops Share', async () => {
+    mockFetch({ '/api/auth/session': ok({ user: USER }), '/api/searches': ok({ searches: [] }) });
+    renderApp();
+    await findChip();
+    fireEvent.click(screen.getByRole('button', { name: 'Replayer' }));
+    expect(screen.getByText('Hand Replayer')).toBeInTheDocument();
+    const menu = await openChipMenu();
+    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(3);
+    expect(within(menu).getByText('Import PokerNow log')).toBeInTheDocument();
+    expect(within(menu).getByText('Hand history')).toBeInTheDocument();
+    expect(within(menu).getByText('Sign out')).toBeInTheDocument();
+    expect(within(menu).queryByText('Share')).toBeNull();
+  });
+
+  it('the solver menu shows Sign out only', async () => {
+    mockFetch({ '/api/auth/session': ok({ user: USER }) });
+    renderApp();
+    await findChip();
+    fireEvent.click(screen.getByRole('button', { name: 'Solver' }));
+    expect(screen.getByText('Spot configuration')).toBeInTheDocument();
+    const menu = await openChipMenu();
+    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(1);
+    expect(within(menu).getByText('Sign out')).toBeInTheDocument();
+    expect(within(menu).queryByText('Import PokerNow log')).toBeNull();
+    expect(within(menu).queryByText('Hand history')).toBeNull();
+    expect(within(menu).queryByText('Share')).toBeNull();
+  });
+});
+
+describe('modal hoisting across views', () => {
+  it('opens the upload dialog from the replayer account menu (was a silent no-op)', async () => {
+    mockFetch({ '/api/auth/session': ok({ user: USER }), '/api/searches': ok({ searches: [] }) });
+    renderApp();
+    await findChip();
+    fireEvent.click(screen.getByRole('button', { name: 'Replayer' }));
+    fireEvent.click(await findChip());
+    fireEvent.click(screen.getByRole('button', { name: 'Import PokerNow log' }));
+    expect(screen.getByRole('dialog', { name: 'Upload PokerNow log' })).toBeInTheDocument();
+  });
+
+  it('completing a replayer import saves each hand as a replay and opens the history drawer', async () => {
+    const posts = [];
+    mockFetch({
+      '/api/auth/session': ok({ user: USER }),
+      '/api/searches': (u, o) => {
+        if (((o && o.method) || 'GET') === 'POST') { posts.push(JSON.parse(o.body)); return ok({ search: { id: 'n' + posts.length } }); }
+        return ok({ searches: [] });
+      },
+    });
+    renderApp();
+    await findChip();
+    fireEvent.click(screen.getByRole('button', { name: 'Replayer' }));
+    fireEvent.click(await findChip());
+    fireEvent.click(screen.getByRole('button', { name: 'Import PokerNow log' }));
+    const dialog = screen.getByRole('dialog', { name: 'Upload PokerNow log' });
+    dropPnLog(dialog, pnAbLog([1]));
+    fireEvent.click((await screen.findByText('alice')).closest('button'));
+    enterHand(screen.getByPlaceholderText(/Type a hand number/), '1');
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 hand' }));
+    expect(await screen.findByRole('dialog', { name: 'Hand history' })).toBeInTheDocument();
+    expect(posts).toHaveLength(1);
+    expect(posts[0].isReplay).toBe(true);
+    expect(posts[0].name).toBe('PokerNow #1');
+    expect(screen.queryByRole('dialog', { name: 'Upload PokerNow log' })).toBeNull();
   });
 });
 
