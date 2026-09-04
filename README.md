@@ -35,6 +35,7 @@ PokerLab lets you deal hole cards, assign ranges, and set the board, then comput
 |                                                          |
 |         NextAuth v5 · Credentials + Google · JWT         |
 |      /api/searches · saved-hand CRUD · rate-limited      |
+|     /api/billing · Stripe Checkout · webhook-synced      |
 +----------------------------------------------------------+
                              |
                              |

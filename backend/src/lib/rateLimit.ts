@@ -49,6 +49,7 @@ const LIMITS = {
   // keyed by userId; well above normal auto-save volume
   save: { n: 60, window: '1 m', ms: 60_000 },
   read: { n: 120, window: '1 m', ms: 60_000 },
+  billing: { n: 10, window: '10 m', ms: 10 * 60_000 },
 } as const
 
 type Kind = keyof typeof LIMITS
