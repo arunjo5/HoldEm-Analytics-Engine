@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://pokerlab-backend.vercel.app/api/:path*"
+    },
+    {
+      "source": "/s/:code",
+      "destination": "/index.html"
     }
   ],
   "headers": [

@@ -15,6 +15,7 @@ const FREE_FEATURES = [
 export const PRO_FEATURES = [
   'Everything in Free',
   'Unlimited saved hands and favorites',
+  'Permanent short share links',
   'Imported PokerNow hands are never pruned',
   'Support PokerLab’s development',
 ];

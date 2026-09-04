@@ -1,34 +1,68 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { splitShareUrl } from './shareLinks.js';
+
+async function copyText(text, inputEl) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    inputEl?.select();
+    document.execCommand('copy');
+  }
+}
 
 /**
  * ShareModal — copy-to-clipboard link with hash-encoded scenario.
  * Friends opening the link will get the exact same setup loaded.
+ * `short` (optional): { pro, signedIn, create(kind, payload), onUpgrade } adds the Pro section.
  */
-export function ShareModal({ open, onClose, url }) {
+export function ShareModal({ open, onClose, url, short = null }) {
   const [copied, setCopied] = useState(false);
+  const [shortUrl, setShortUrl] = useState('');
+  const [shortBusy, setShortBusy] = useState(false);
+  const [shortError, setShortError] = useState(null);
+  const [copiedShort, setCopiedShort] = useState(false);
   const inputRef = useRef(null);
+  const shortRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     setCopied(false);
+    setShortUrl('');
+    setShortBusy(false);
+    setShortError(null);
+    setCopiedShort(false);
     setTimeout(() => inputRef.current?.select(), 60);
-  }, [open]);
+  }, [open, url]);
 
   if (!open) return null;
 
   async function copy() {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        inputRef.current?.select();
-        document.execCommand('copy');
-      }
+      await copyText(url, inputRef.current);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
       // ignore — user can copy manually from the field
     }
+  }
+
+  async function copyShort() {
+    try {
+      await copyText(shortUrl, shortRef.current);
+      setCopiedShort(true);
+      setTimeout(() => setCopiedShort(false), 1800);
+    } catch { /* same */ }
+  }
+
+  async function createShort() {
+    const parts = splitShareUrl(url);
+    if (!parts) { setShortError('Nothing to shorten yet.'); return; }
+    setShortBusy(true);
+    setShortError(null);
+    const res = await short.create(parts.kind, parts.payload);
+    setShortBusy(false);
+    if (res && res.ok && res.url) setShortUrl(res.url);
+    else setShortError((res && res.error) || 'Could not create the link.');
   }
 
   return (
@@ -74,6 +108,46 @@ export function ShareModal({ open, onClose, url }) {
               )}
             </button>
           </div>
+
+          {short && (short.pro ? (
+            <div className="share-short">
+              <div className="share-link-label">Permanent short link</div>
+              {shortUrl ? (
+                <>
+                  <div className="share-link-row">
+                    <input
+                      ref={shortRef}
+                      className="share-link share-link-short"
+                      type="text"
+                      value={shortUrl}
+                      readOnly
+                      onClick={(e) => e.target.select()}
+                    />
+                    <button className="btn btn-primary share-copy-btn" onClick={copyShort}>
+                      {copiedShort ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <div className="share-hint">Stays live until you delete it from Hand History → Links.</div>
+                </>
+              ) : (
+                <>
+                  <div className="share-link-row">
+                    <div className="share-short-blurb">A short link that never breaks, listed under your account.</div>
+                    <button className="btn share-copy-btn" onClick={createShort} disabled={shortBusy}>
+                      {shortBusy ? 'Creating…' : 'Create'}
+                    </button>
+                  </div>
+                  {shortError && <div className="share-error" role="alert">{shortError}</div>}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="share-pro-tease">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></svg>
+              <span>Pro members get a permanent short link that never breaks.</span>
+              <button className="link-btn" onClick={short.onUpgrade}>{short.signedIn ? 'Upgrade' : 'See Pro'}</button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

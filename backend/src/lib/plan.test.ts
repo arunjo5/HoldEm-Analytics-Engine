@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe('PLAN_LIMITS', () => {
   it('caps free at 25 saves and pro at 5000', () => {
-    expect(PLAN_LIMITS).toEqual({ free: { saveCap: 25 }, pro: { saveCap: 5000 } })
+    expect(PLAN_LIMITS).toEqual({ free: { saveCap: 25, shareLinks: 0 }, pro: { saveCap: 5000, shareLinks: 500 } })
   })
 })
 

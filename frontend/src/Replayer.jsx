@@ -832,7 +832,7 @@ function makeSeats(n, bb) {
 }
 
 // Top-level: builder → playback.
-export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavorite, userMenu, themeToggle, historyDrawer }) {
+export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavorite, userMenu, themeToggle, historyDrawer, shareShort }) {
   const [hand, setHand] = useState(initialHand || null); // { setup, actions, board }
   const [idx, setIdx] = useState(0);
   const [savedId, setSavedId] = useState((initialHand && initialHand.savedId) || null);
@@ -1015,7 +1015,7 @@ export function ReplayerView({ initialHand, onExit, onSaveToHistory, onSetFavori
           {toast}
         </div>
       )}
-      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} short={shareShort} />
       {historyDrawer}
     </div>
   );
