@@ -48,6 +48,7 @@ model User {
   planExpiresAt        DateTime?
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?
+  shareLinks    ShareLink[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -74,4 +75,19 @@ model Search {
   createdAt   DateTime @default(now())
   lastAccessedAt DateTime @default(now())
   name        String?
+}
+
+// pro short links; payload uses the #s= / #r= encoding
+model ShareLink {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  payload     String   @db.Text
+  payloadHash String
+  name        String?
+  views       Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@index([userId, payloadHash])
 }

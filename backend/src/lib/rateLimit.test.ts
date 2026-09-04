@@ -180,6 +180,7 @@ describe('limit() dispatcher (in-memory fallback)', () => {
       ['save', 60],
       ['read', 120],
       ['billing', 10],
+      ['share', 30],
     ] as const
     for (const [kind, n] of KINDS) {
       for (let i = 0; i < n; i++) expect((await limit(kind, 'id')).ok).toBe(true)
@@ -199,13 +200,14 @@ describe('limit() with upstash configured', () => {
       'rl:save': [60, '1 m'],
       'rl:read': [120, '1 m'],
       'rl:billing': [10, '10 m'],
+      'rl:share': [30, '1 h'],
     })
   })
 
   it('keeps the upstash window strings consistent with the in-memory windows', async () => {
     await load(true)
     const captured = h.ctors.map((c) => ({ kind: c.prefix.slice(3), n: c.n, window: c.window }))
-    expect(captured).toHaveLength(6)
+    expect(captured).toHaveLength(7)
     const UNIT: Record<string, number> = { s: 1_000, m: 60_000, h: 3_600_000 }
     const { limit } = await load() // fresh module, no upstash
     for (const { kind, n, window } of captured) {
