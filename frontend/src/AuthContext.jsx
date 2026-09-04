@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 
 const AuthContext = createContext(null);
 
+const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false };
+// survives the full-page google redirect so checkout resumes after sign-in
+const CHECKOUT_KEY = 'pokerlab_checkout_intent';
+
 async function getCsrfToken() {
   const r = await fetch('/api/auth/csrf', { credentials: 'include' });
   const { csrfToken } = await r.json();
@@ -15,6 +19,10 @@ export function AuthProvider({ children }) {
   const [modalBusy, setModalBusy] = useState(false);
   const [modalError, setModalError] = useState(null);
   const [oauth, setOauth] = useState([]); // configured OAuth provider ids (e.g. ['google'])
+  const [modalMode, setModalMode] = useState('signin');
+  const [plan, setPlan] = useState(EMPTY_PLAN);
+  // 'month' | 'year' while the sign-in modal is a step on the way to checkout
+  const [checkoutIntent, setCheckoutIntent] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -33,6 +41,74 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const refreshPlan = useCallback(async () => {
+    try {
+      const r = await fetch('/api/billing/status', { credentials: 'include' });
+      if (!r.ok) { setPlan(EMPTY_PLAN); return EMPTY_PLAN; }
+      const next = { ...EMPTY_PLAN, ...(await r.json()) };
+      setPlan(next);
+      return next;
+    } catch {
+      setPlan(EMPTY_PLAN);
+      return EMPTY_PLAN;
+    }
+  }, []);
+
+  const userKey = user ? (user.id || user.email || 'user') : '';
+  useEffect(() => { refreshPlan(); }, [userKey, refreshPlan]);
+
+  const beginCheckout = useCallback(async (interval) => {
+    try {
+      const r = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interval }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.url) return { ok: false, error: data.error || `Checkout failed (${r.status})` };
+      window.location.assign(data.url);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error' };
+    }
+  }, []);
+
+  // checkout needs an account: signed out, the modal opens first and checkout resumes after
+  const startCheckout = useCallback(async (interval = 'year') => {
+    if (!user) {
+      setModalError(null);
+      setModalMode('signin');
+      setCheckoutIntent(interval);
+      setModalOpen(true);
+      return { ok: false, pending: true };
+    }
+    return beginCheckout(interval);
+  }, [user, beginCheckout]);
+
+  // back from google with a checkout waiting
+  useEffect(() => {
+    if (!user) return;
+    let intent = null;
+    try {
+      intent = sessionStorage.getItem(CHECKOUT_KEY);
+      if (intent) sessionStorage.removeItem(CHECKOUT_KEY);
+    } catch { /* storage blocked */ }
+    if (intent === 'month' || intent === 'year') beginCheckout(intent);
+  }, [userKey, user, beginCheckout]);
+
+  const openPortal = useCallback(async () => {
+    try {
+      const r = await fetch('/api/billing/portal', { method: 'POST', credentials: 'include' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.url) return { ok: false, error: data.error || `Could not open billing (${r.status})` };
+      window.location.assign(data.url);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error' };
+    }
+  }, []);
+
   // Discover which OAuth providers the backend has configured (Google appears
   // only once its env vars are set), so the button shows only when usable.
   useEffect(() => {
@@ -42,14 +118,24 @@ export function AuthProvider({ children }) {
       .catch(() => {});
   }, []);
 
-  function signIn() {
+  function signIn(opts) {
     setModalError(null);
+    setModalMode(opts && opts.mode === 'signup' ? 'signup' : 'signin');
+    setCheckoutIntent(null);
     setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setCheckoutIntent(null);
   }
 
   // OAuth: a full-page POST so the browser follows the provider redirect chain
   // and the session cookie lands on this (frontend) origin via the /api proxy.
   async function oauthSignIn(provider) {
+    if (checkoutIntent) {
+      try { sessionStorage.setItem(CHECKOUT_KEY, checkoutIntent); } catch { /* storage blocked */ }
+    }
     const csrf = await getCsrfToken();
     const form = document.createElement('form');
     form.method = 'POST';
@@ -106,6 +192,10 @@ export function AuthProvider({ children }) {
       const u = await refresh();
       if (!u) throw new Error('Invalid username or password');
       setModalOpen(false);
+      if (checkoutIntent) {
+        setCheckoutIntent(null);
+        beginCheckout(checkoutIntent);
+      }
     } catch (e) {
       setModalError(e.message || 'Something went wrong');
     } finally {
@@ -141,15 +231,17 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, refresh }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, refresh, plan, refreshPlan, startCheckout, openPortal }}>
       {children}
       <AuthModal
         open={modalOpen}
         busy={modalBusy}
         error={modalError}
         oauth={oauth}
+        initialMode={modalMode}
+        intent={checkoutIntent}
         onOauth={oauthSignIn}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
         onSubmit={submitCredentials}
       />
     </AuthContext.Provider>
@@ -167,20 +259,20 @@ function GoogleIcon() {
   );
 }
 
-function AuthModal({ open, busy, error, oauth = [], onOauth, onClose, onSubmit }) {
-  const [mode, setMode] = useState('signin');
+function AuthModal({ open, busy, error, oauth = [], initialMode = 'signin', intent = null, onOauth, onClose, onSubmit }) {
+  const [mode, setMode] = useState(initialMode);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
   useEffect(() => {
     if (open) {
-      setMode('signin');
+      setMode(initialMode);
       setUsername('');
       setPassword('');
       setName('');
     }
-  }, [open]);
+  }, [open, initialMode]);
 
   if (!open) return null;
 
@@ -189,11 +281,15 @@ function AuthModal({ open, busy, error, oauth = [], onOauth, onClose, onSubmit }
       <div className="share-modal" role="dialog" aria-label={mode === 'signup' ? 'Create account' : 'Sign in'}>
         <div className="share-head">
           <div>
-            <div className="auth-title">{mode === 'signup' ? 'Create account' : 'Sign in'}</div>
+            <div className="auth-title">
+              {mode === 'signup' ? 'Create account' : intent ? 'Sign in to continue' : 'Sign in'}
+            </div>
             <div className="auth-sub">
-              {mode === 'signup'
-                ? 'Save and revisit hands across devices.'
-                : 'Welcome back.'}
+              {intent
+                ? 'Pro is tied to your account. Sign in and we’ll take you straight to checkout.'
+                : mode === 'signup'
+                  ? 'Save and revisit hands across devices.'
+                  : 'Welcome back.'}
             </div>
           </div>
           <button className="modal-x" onClick={onClose} disabled={busy} aria-label="Close">×</button>

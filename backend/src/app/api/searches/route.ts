@@ -3,9 +3,9 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { readJsonBody, cleanName } from '@/lib/body'
 import { limit } from '@/lib/rateLimit'
+import { getPlan } from '@/lib/plan'
 
-// Per-user row cap. Over this, non-favorites get pruned before favorites.
-const SAVE_CAP = 500
+// Per-user row cap comes from the plan. Over it, non-favorites get pruned before favorites.
 const MAX_BODY = 100 * 1024 // legit saves are a few KB
 const MAX_NAME = 200
 
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
 
     const parsed = await readJsonBody(request, MAX_BODY)
     if (parsed.error) return parsed.error
+    const { plan, saveCap } = await getPlan(userId)
     const { name, players, board, odds, playerNames, scenario, isReplay, replay, favorite } = parsed.data
 
     if (!players || !board || !odds) {
@@ -88,14 +89,15 @@ export async function POST(request: NextRequest) {
     const stale = await prisma.search.findMany({
       where: { userId },
       orderBy: [{ favorite: 'desc' }, { lastAccessedAt: 'desc' }, { createdAt: 'desc' }],
-      skip: SAVE_CAP,
+      skip: saveCap,
       select: { id: true },
     })
     if (stale.length) {
       await prisma.search.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
     }
+    const used = await prisma.search.count({ where: { userId } })
 
-    return NextResponse.json({ search })
+    return NextResponse.json({ search, limit: { plan, cap: saveCap, used, atCap: used >= saveCap } })
   } catch (error) {
     console.error('Error creating search:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

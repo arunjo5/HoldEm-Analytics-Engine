@@ -5,7 +5,7 @@ Texas Hold'em analytics: Monte Carlo equity, range analysis, pot odds/MDF, a hea
 ## Stack
 
 - Vite + React 18 (JavaScript)
-- The poker engine runs in-browser (Monte Carlo in a Web Worker). Accounts and saved hands talk to the backend over `/api`.
+- The poker engine runs in-browser (Monte Carlo in a Web Worker). Accounts, saved hands, and billing talk to the backend over `/api`.
 
 ## Run locally
 
@@ -55,6 +55,8 @@ frontend/
     ├── Pickers.jsx         CardPicker (52-card grid) + RangePicker (13x13)
     ├── Seat.jsx            PlayerSeat + range thumbnail
     ├── HistoryDrawer.jsx   saved-hand history panel
+    ├── PlansView.jsx       Free vs Pro plans page
+    ├── UpgradePrompt.jsx   shown once when a free account fills its history
     ├── ShareModal.jsx      share-link modal
     ├── UploadModal.jsx     PokerNow log import
     └── AuthContext.jsx     session state from the backend

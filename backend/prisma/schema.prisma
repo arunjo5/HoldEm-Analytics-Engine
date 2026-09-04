@@ -42,6 +42,12 @@ model User {
   accounts      Account[]
   sessions      Session[]
   searches      Search[]
+  // billing: mirrored from Stripe by the webhook; "free" | "pro"
+  plan                 String    @default("free")
+  planInterval         String?
+  planExpiresAt        DateTime?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

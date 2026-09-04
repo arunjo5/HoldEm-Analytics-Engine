@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('@/auth', () => ({ auth: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
-  prisma: { search: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() } },
+  prisma: { search: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn(), count: vi.fn(async () => 0) } },
+}))
+vi.mock('@/lib/plan', () => ({
+  getPlan: vi.fn(async () => ({ plan: 'free', saveCap: 25, interval: null, expiresAt: null, hasCustomer: false })),
 }))
 vi.mock('@/lib/rateLimit', () => ({ limit: vi.fn(async () => ({ ok: true, retryAfter: 0 })) }))
 
@@ -10,6 +13,7 @@ import { POST, GET } from '@/app/api/searches/route'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { limit } from '@/lib/rateLimit'
+import { getPlan } from '@/lib/plan'
 
 function req(body: unknown, headers: Record<string, string> = {}): Request {
   const json = JSON.stringify(body)
@@ -75,7 +79,7 @@ describe('searches POST LRU prune', () => {
     expect((prisma.search.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0]).toEqual({
       where: { userId: 'user1' },
       orderBy: [{ favorite: 'desc' }, { lastAccessedAt: 'desc' }, { createdAt: 'desc' }],
-      skip: 500,
+      skip: 25,
       select: { id: true },
     })
   })
@@ -239,5 +243,54 @@ describe('searches GET', () => {
   it('500 when the list query fails', async () => {
     ;(prisma.search.findMany as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'))
     expect((await GET()).status).toBe(500)
+  })
+})
+
+describe('searches POST plan-aware cap', () => {
+  const mock = (f: unknown) => f as ReturnType<typeof vi.fn>
+  const PRO = { plan: 'pro', saveCap: 5000, interval: 'year', expiresAt: null, hasCustomer: true }
+
+  beforeEach(() => {
+    // clearAllMocks keeps implementations, so undo the failure stubs earlier blocks left behind
+    mock(prisma.search.count).mockResolvedValue(0)
+    mock(prisma.search.deleteMany).mockResolvedValue({ count: 1 })
+  })
+
+  it('prunes at the free cap and reports the free limit', async () => {
+    const res = await POST(req(valid) as never)
+    expect(mock(prisma.search.findMany).mock.calls[0][0].skip).toBe(25)
+    expect((await res.json()).limit).toEqual({ plan: 'free', cap: 25, used: 0, atCap: false })
+  })
+
+  it('prunes at the pro cap for a pro user', async () => {
+    mock(getPlan).mockResolvedValueOnce(PRO)
+    mock(prisma.search.count).mockResolvedValue(120)
+    const res = await POST(req(valid) as never)
+    expect(getPlan).toHaveBeenCalledWith('user1')
+    expect(mock(prisma.search.findMany).mock.calls[0][0].skip).toBe(5000)
+    expect((await res.json()).limit).toEqual({ plan: 'pro', cap: 5000, used: 120, atCap: false })
+  })
+
+  it('flags atCap once the count reaches the cap', async () => {
+    mock(prisma.search.count).mockResolvedValue(25)
+    expect((await (await POST(req(valid) as never)).json()).limit.atCap).toBe(true)
+    mock(prisma.search.count).mockResolvedValue(24)
+    expect((await (await POST(req(valid) as never)).json()).limit.atCap).toBe(false)
+  })
+
+  it('counts what survived the prune, not what existed before it', async () => {
+    mock(prisma.search.findMany).mockResolvedValue([{ id: 'old1' }])
+    const res = await POST(req(valid) as never)
+    expect(res.status).toBe(200)
+    expect(prisma.search.count).toHaveBeenCalledWith({ where: { userId: 'user1' } })
+    expect(mock(prisma.search.count).mock.invocationCallOrder[0]).toBeGreaterThan(
+      mock(prisma.search.deleteMany).mock.invocationCallOrder[0]
+    )
+  })
+
+  it('still returns the saved search alongside the limit', async () => {
+    const body = await (await POST(req(valid) as never)).json()
+    expect(body.search.userId).toBe('user1')
+    expect(body.limit.cap).toBe(25)
   })
 })

@@ -5,7 +5,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('@/auth', () => ({ auth: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
-  prisma: { search: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() } },
+  prisma: { search: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn(), count: vi.fn(async () => 0) } },
+}))
+vi.mock('@/lib/plan', () => ({
+  getPlan: vi.fn(async () => ({ plan: 'free', saveCap: 25, interval: null, expiresAt: null, hasCustomer: false })),
 }))
 vi.mock('@/lib/rateLimit', () => ({ limit: vi.fn(async () => ({ ok: true, retryAfter: 0 })) }))
 

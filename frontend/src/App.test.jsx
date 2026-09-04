@@ -581,9 +581,10 @@ describe('context-aware account menu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Replayer' }));
     expect(screen.getByText('Hand Replayer')).toBeInTheDocument();
     const menu = await openChipMenu();
-    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(3);
+    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(4);
     expect(within(menu).getByText('Import PokerNow log')).toBeInTheDocument();
     expect(within(menu).getByText('Hand history')).toBeInTheDocument();
+    expect(within(menu).getByText('Upgrade to Pro')).toBeInTheDocument();
     expect(within(menu).getByText('Sign out')).toBeInTheDocument();
     expect(within(menu).queryByText('Share')).toBeNull();
   });
@@ -657,17 +658,18 @@ describe('UserChip', () => {
     expect(img).toHaveAttribute('src', 'http://x/a.png');
   });
 
-  it('opens a menu with the account header and the four items', async () => {
+  it('opens a menu with the account header and the five items', async () => {
     mockFetch({ '/api/auth/session': ok({ user: USER }) });
     renderApp();
     fireEvent.click(await findChip());
     const menu = document.querySelector('.user-menu');
     expect(within(menu).getByText('Arun')).toBeInTheDocument();
     expect(within(menu).getByText('a@b.c')).toBeInTheDocument();
-    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(4);
+    expect(menu.querySelectorAll('.user-menu-item')).toHaveLength(5);
     expect(within(menu).getByText('Import PokerNow log')).toBeInTheDocument();
     expect(within(menu).getByText('Hand history')).toBeInTheDocument();
     expect(within(menu).getByText('Share')).toBeInTheDocument();
+    expect(within(menu).getByText('Upgrade to Pro')).toBeInTheDocument();
     expect(within(menu).getByText('Sign out')).toBeInTheDocument();
   });
 
