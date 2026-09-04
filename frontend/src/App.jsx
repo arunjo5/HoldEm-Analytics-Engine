@@ -8,6 +8,8 @@ import { HistoryDrawer } from './HistoryDrawer.jsx';
 import { ShareModal } from './ShareModal.jsx';
 import { UploadModal } from './UploadModal.jsx';
 import { ReplayerView, readReplayFromUrl } from './Replayer.jsx';
+import { decodeReplay } from './replayShare.js';
+import { readShareCodeFromUrl, shortLinkUrl, createShareLink, fetchShareLink, listShareLinks, deleteShareLink, renameShareLink } from './shareLinks.js';
 import { SolverView } from './SolverView.jsx';
 import { PlansView } from './PlansView.jsx';
 import { UpgradePrompt } from './UpgradePrompt.jsx';
@@ -131,14 +133,14 @@ export default function App() {
   const [limitPrompt, setLimitPrompt] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const limitShownRef = useRef(false);
-  const [billingToast, setBillingToast] = useState(null);
+  const [noticeToast, setNoticeToast] = useState(null);
   const [activating, setActivating] = useState(() => {
     try { return new URLSearchParams(window.location.search).get('billing') === 'success'; } catch { return false; }
   });
 
-  function flashBilling(msg) {
-    setBillingToast(msg);
-    setTimeout(() => setBillingToast(null), 3600);
+  function flashNotice(msg) {
+    setNoticeToast(msg);
+    setTimeout(() => setNoticeToast(null), 3600);
   }
 
   // the save response says when a free account is full; prompt once per session
@@ -153,7 +155,7 @@ export default function App() {
     setUpgradeBusy(true);
     const res = await startCheckout('year');
     setUpgradeBusy(false);
-    if (res && res.error) flashBilling(res.error);
+    if (res && res.error) flashNotice(res.error);
     else setLimitPrompt(false);
   }
 
@@ -173,20 +175,65 @@ export default function App() {
     if (!user) return;
     let cancelled = false;
     let tries = 0;
-    setBillingToast('Activating Pro…');
+    setNoticeToast('Activating Pro…');
     const tick = async () => {
       const p = await refreshPlan();
       if (cancelled) return;
-      if (p.plan === 'pro') { setActivating(false); flashBilling('You’re on Pro'); return; }
-      if (++tries >= 12) { setActivating(false); flashBilling('Payment received. Pro switches on in a moment.'); return; }
+      if (p.plan === 'pro') { setActivating(false); flashNotice('You’re on Pro'); return; }
+      if (++tries >= 12) { setActivating(false); flashNotice('Payment received. Pro switches on in a moment.'); return; }
       setTimeout(tick, 1500);
     };
     tick();
     return () => { cancelled = true; };
   }, [activating, authLoading, user, refreshPlan]);
 
-  // ── Auto-load a scenario (or shared replay) from the URL hash on first mount ──
+  // load a shared scenario; mark it saved so only edits persist
+  function applySharedScenario(sc) {
+    setPlayers(sc.players);
+    setBoard(sc.board);
+    setPlayerNames(sc.playerNames);
+    setPot(sc.pot);
+    setCallAmt(sc.callAmt);
+    lastSavedScenarioRef.current = encodeScenario({
+      players: sc.players, board: sc.board, playerNames: sc.playerNames,
+      pot: sc.pot, callAmt: sc.callAmt,
+    });
+    setView('calc');
+    setShowHistory(false);
+    setSharedToast(true);
+    setTimeout(() => setSharedToast(false), 3600);
+  }
+
+  // resolve a /s/<code> link and load it
+  async function loadShareCode(code) {
+    const res = await fetchShareLink(code);
+    if (!res.ok) {
+      flashNotice(res.status === 404 ? 'This link no longer exists' : res.error);
+      return false;
+    }
+    if (res.kind === 'replay') {
+      const rep = decodeReplay(res.payload);
+      if (!rep) { flashNotice('This link is broken'); return false; }
+      setReplayHand(rep);
+      setShowHistory(false);
+      setView('replayer');
+      return true;
+    }
+    const sc = decodeScenario(res.payload);
+    if (!sc) { flashNotice('This link is broken'); return false; }
+    applySharedScenario(sc);
+    return true;
+  }
+
+  // ── Auto-load from the URL on first mount (/s/<code>, #r=, #s=) ──
   useEffect(() => {
+    const code = readShareCodeFromUrl();
+    if (code) {
+      // strip the path so a refresh doesn't re-load
+      window.history.replaceState(null, '', '/' + window.location.search);
+      loadShareCode(code);
+      return;
+    }
     const rep = readReplayFromUrl();
     if (rep) {
       setReplayHand(rep);
@@ -196,21 +243,10 @@ export default function App() {
     }
     const sc = readScenarioFromUrl();
     if (!sc) return;
-    setPlayers(sc.players);
-    setBoard(sc.board);
-    setPlayerNames(sc.playerNames);
-    setPot(sc.pot);
-    setCallAmt(sc.callAmt);
-    // Treat the shared spot as already-saved; only persist if the user edits it.
-    lastSavedScenarioRef.current = encodeScenario({
-      players: sc.players, board: sc.board, playerNames: sc.playerNames,
-      pot: sc.pot, callAmt: sc.callAmt,
-    });
     // strip hash so refreshes don't re-load
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    setSharedToast(true);
-    const t = setTimeout(() => setSharedToast(false), 3600);
-    return () => clearTimeout(t);
+    applySharedScenario(sc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Persist custom player names locally ──
@@ -235,9 +271,53 @@ export default function App() {
     }
   }, [user]);
 
+  // ── Pro short links ──
+  const [links, setLinks] = useState(null); // null = not loaded yet
+  const [linksLoading, setLinksLoading] = useState(false);
+  const refreshLinks = useCallback(async () => {
+    if (!user) { setLinks(null); return; }
+    setLinksLoading(true);
+    const res = await listShareLinks();
+    setLinks(res.ok ? res.links || [] : []);
+    setLinksLoading(false);
+  }, [user]);
+  useEffect(() => { if (!user) setLinks(null); }, [user]);
+
+  async function deleteLink(code) {
+    setLinks(prev => (prev || []).filter(l => l.code !== code));
+    const res = await deleteShareLink(code);
+    if (!res.ok) { flashNotice(res.error); refreshLinks(); }
+  }
+  async function renameLink(code, name) {
+    setLinks(prev => (prev || []).map(l => (l.code === code ? { ...l, name: name || null } : l)));
+    const res = await renameShareLink(code, name);
+    if (!res.ok) { flashNotice(res.error); refreshLinks(); }
+  }
+  function openLink(code) {
+    setShowHistory(false);
+    loadShareCode(code);
+  }
+
+  // for both share modals; kind/payload come from the long url
+  const shareShort = billingOn ? {
+    pro: isPro,
+    signedIn: !!user,
+    onUpgrade: () => { setShowShare(false); setView('plans'); },
+    create: async (kind, payload) => {
+      const res = await createShareLink({ kind, payload });
+      if (!res.ok) {
+        if (res.code === 'pro_required') refreshPlan();
+        return { ok: false, error: res.error };
+      }
+      if (links !== null) refreshLinks();
+      return { ok: true, url: shortLinkUrl(res.link.code) };
+    },
+  } : null;
+
   function openHistory() {
     setShowHistory(true);
     refreshHistory();
+    if (billingOn) refreshLinks();
   }
 
   async function toggleFavorite(id, favorite) {
@@ -735,7 +815,7 @@ export default function App() {
       onOpenShare={ctx === 'calc' ? openShare : undefined}
       onOpenUpload={ctx !== 'solver' ? openUpload : undefined}
       onUpgrade={billingOn && ctx !== 'solver' ? () => setView('plans') : undefined}
-      onManage={billingOn && ctx !== 'solver' ? async () => { const res = await openPortal(); if (res && res.error) flashBilling(res.error); } : undefined}
+      onManage={billingOn && ctx !== 'solver' ? async () => { const res = await openPortal(); if (res && res.error) flashNotice(res.error); } : undefined}
     />
   ) : signInEl;
   const themeToggleEl = (
@@ -755,13 +835,19 @@ export default function App() {
       onDelete={deleteHistoryItem}
       onClear={clearAllUnfavorited}
       user={user}
+      links={billingOn && (isPro || (links && links.length > 0)) ? links || [] : undefined}
+      linksLoading={linksLoading}
+      linkUrl={shortLinkUrl}
+      onOpenLink={openLink}
+      onDeleteLink={deleteLink}
+      onRenameLink={renameLink}
     />
   );
 
   // overlays render in every view
   const sharedOverlays = (
     <>
-      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
+      <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} short={shareShort} />
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onConfirm={onImportConfirm} />
       <UpgradePrompt
         open={limitPrompt}
@@ -771,12 +857,12 @@ export default function App() {
         onCompare={() => { setLimitPrompt(false); setView('plans'); }}
         onUpgrade={upgradeNow}
       />
-      {(sharedToast || importToast || billingToast) && (
+      {(sharedToast || importToast || noticeToast) && (
         <div className="shared-toast">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          {billingToast || importToast || 'Loaded shared scenario'}
+          {noticeToast || importToast || 'Loaded shared scenario'}
         </div>
       )}
     </>
@@ -794,6 +880,7 @@ export default function App() {
           userMenu={accountMenuFor('replayer')}
           themeToggle={themeToggleEl}
           historyDrawer={historyDrawerEl}
+          shareShort={shareShort}
         />
         {sharedOverlays}
       </>

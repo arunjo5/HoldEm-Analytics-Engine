@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { SuitGlyph, SUIT_RED } from './Cards.jsx';
 
 function relTime(d) {
@@ -117,6 +117,81 @@ function HistoryRow({ item, onLoad, onToggleFavorite, onDelete }) {
  * HistoryDrawer — slide-in panel of saved hands. Filter All / Starred,
  * load, favorite, delete, clear all.
  */
+// one short link row
+function LinkRow({ link, url, onOpen, onDelete, onRename }) {
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(link.name || '');
+  const doneRef = useRef(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard blocked; the url is visible in the row */ }
+  }
+
+  function startRename() {
+    setDraft(link.name || '');
+    doneRef.current = false;
+    setEditing(true);
+  }
+
+  // enter/blur save, escape cancels; the ref guards the blur after enter
+  function finishRename(save) {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setEditing(false);
+    const name = draft.trim();
+    if (save && name !== (link.name || '')) onRename(name);
+  }
+
+  return (
+    <div className="link-row">
+      <button className="link-load" onClick={onOpen} title="Open">
+        <div className="link-row-top">
+          <span className="link-kind">{link.kind === 'replay' ? 'REPLAY' : 'SPOT'}</span>
+          <span className="link-row-name">{link.name || 'Untitled'}</span>
+          <span className="hist-time">{relTime(new Date(link.createdAt))}</span>
+        </div>
+        <div className="link-row-url">{url.replace(/^https?:\/\//, '')}</div>
+        <div className="link-row-meta">{link.views} view{link.views === 1 ? '' : 's'}</div>
+      </button>
+      <div className="link-acts">
+        {editing ? (
+          <input
+            className="link-rename"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); finishRename(true); }
+              else if (e.key === 'Escape') finishRename(false);
+            }}
+            onBlur={() => finishRename(true)}
+            autoFocus
+            maxLength={100}
+            placeholder="Name"
+            aria-label="Link name"
+          />
+        ) : (
+          <>
+            <button className="link-act" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+            <button className="link-act" onClick={startRename}>Rename</button>
+          </>
+        )}
+        <button className="hist-del" onClick={onDelete} aria-label="Delete link" title="Delete link">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 7h16" />
+            <path d="M9 7V4h6v3" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HistoryDrawer({
   open,
   onClose,
@@ -128,8 +203,17 @@ export function HistoryDrawer({
   onDelete,
   onClear,
   user,
+  links,
+  linksLoading,
+  linkUrl,
+  onOpenLink,
+  onDeleteLink,
+  onRenameLink,
 }) {
   const [filter, setFilter] = useState('all');
+  const showLinks = Array.isArray(links);
+  // the tab can vanish mid-view (free user deleting their last link)
+  useEffect(() => { if (!showLinks && filter === 'links') setFilter('all'); }, [showLinks, filter]);
   const [confirmingClear, setConfirmingClear] = useState(false);
   useEffect(() => { if (!open) { setFilter('all'); setConfirmingClear(false); } }, [open]);
 
@@ -169,7 +253,15 @@ export function HistoryDrawer({
             </svg>
             Starred<span className="drawer-tab-count">{starredCount}</span>
           </button>
-          {history.length > 0 && (
+          {showLinks && (
+            <button className={'drawer-tab ' + (filter === 'links' ? 'active' : '')} onClick={() => setFilter('links')}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
+                <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5" />
+              </svg>
+              Links<span className="drawer-tab-count">{links.length}</span>
+            </button>
+          )}
+          {history.length > 0 && filter !== 'links' && (
             confirmingClear ? (
               <span className="drawer-clear-confirm">
                 <span className="drawer-clear-q">Clear unfavorited?</span>
@@ -191,7 +283,27 @@ export function HistoryDrawer({
         </div>
 
         <div className="drawer-body">
-          {loading ? (
+          {showLinks && filter === 'links' ? (
+            linksLoading ? (
+              <div className="drawer-empty">
+                <div className="drawer-empty-sub">Loading links…</div>
+              </div>
+            ) : links.length === 0 ? (
+              <div className="drawer-empty">
+                <div className="drawer-empty-title">No short links yet</div>
+                <div className="drawer-empty-sub">Open Share on a spot or replay and create a permanent link.</div>
+              </div>
+            ) : links.map(l => (
+              <LinkRow
+                key={l.code}
+                link={l}
+                url={linkUrl(l.code)}
+                onOpen={() => onOpenLink(l.code)}
+                onDelete={() => onDeleteLink(l.code)}
+                onRename={(name) => onRenameLink(l.code, name)}
+              />
+            ))
+          ) : loading ? (
             <div className="drawer-empty">
               <div className="drawer-empty-sub">Loading hand history…</div>
             </div>

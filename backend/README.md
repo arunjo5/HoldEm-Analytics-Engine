@@ -62,6 +62,7 @@ src/
 │   ├── api/searches/[id]/        favorite, rename, touch, or delete one
 │   ├── api/billing/              status, Stripe Checkout + Customer Portal sessions
 │   ├── api/webhooks/stripe/      signed webhook that mirrors subscriptions onto users
+│   ├── api/share/                Pro short links: create + list, resolve/rename/delete one
 │   ├── layout.tsx · page.tsx · providers.tsx · theme.ts
 │   └── globals.css
 ├── components/                   Header, auth (SignInButton, UserMenu), ColorModeToggle
@@ -72,7 +73,8 @@ src/
 │   ├── body.ts                   JSON body parsing + input sanitizing
 │   ├── plan.ts                   plan limits + effective plan lookup
 │   ├── stripe.ts                 Stripe client, price ids, return URL
-│   └── billing.ts                subscription → user sync used by the webhook
+│   ├── billing.ts                subscription → user sync used by the webhook
+│   └── shareLinks.ts             short-link codes, payload validation
 └── types/next-auth.d.ts
 ```
 
@@ -87,6 +89,10 @@ src/
 - `POST /api/billing/checkout` — start a Stripe Checkout session (`{ interval: "month" | "year" }`)
 - `POST /api/billing/portal` — open the Stripe Customer Portal
 - `POST /api/webhooks/stripe` — Stripe webhook (signature-verified)
+- `GET /api/share` — list your short links
+- `POST /api/share` — create a short link (Pro; `{ kind: "scenario" | "replay", payload, name? }`)
+- `GET /api/share/[code]` — resolve a short link (public)
+- `PATCH /api/share/[code]` — rename · `DELETE /api/share/[code]` — delete
 
 ## License
 

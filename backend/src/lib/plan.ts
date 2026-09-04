@@ -2,10 +2,10 @@ import { prisma } from '@/lib/prisma'
 
 export type Plan = 'free' | 'pro'
 
-export const PLAN_LIMITS: Record<Plan, { saveCap: number }> = {
-  free: { saveCap: 25 },
-  // sold as unlimited; the ceiling only stops one account growing the table without bound
-  pro: { saveCap: 5000 },
+export const PLAN_LIMITS: Record<Plan, { saveCap: number; shareLinks: number }> = {
+  free: { saveCap: 25, shareLinks: 0 },
+  // sold as unlimited; the ceilings just bound one account's rows
+  pro: { saveCap: 5000, shareLinks: 500 },
 }
 
 // a missed renewal webhook shouldn't drop a paying user mid-cycle

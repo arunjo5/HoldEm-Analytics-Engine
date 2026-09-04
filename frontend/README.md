@@ -51,6 +51,7 @@ frontend/
     ├── scenario.js         scenario <-> URL state
     ├── shareCodec.js       compact share-link encoding (lz-string)
     ├── replayShare.js      share encoding for replays
+    ├── shareLinks.js       Pro short links (/s/<code>) client + URL helpers
     ├── Cards.jsx           card chips and glyphs
     ├── Pickers.jsx         CardPicker (52-card grid) + RangePicker (13x13)
     ├── Seat.jsx            PlayerSeat + range thumbnail
