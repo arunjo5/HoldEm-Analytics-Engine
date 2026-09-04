@@ -9,6 +9,8 @@ import { ShareModal } from './ShareModal.jsx';
 import { UploadModal } from './UploadModal.jsx';
 import { ReplayerView, readReplayFromUrl } from './Replayer.jsx';
 import { SolverView } from './SolverView.jsx';
+import { PlansView } from './PlansView.jsx';
+import { UpgradePrompt } from './UpgradePrompt.jsx';
 import {
   encodeScenario,
   decodeScenario,
@@ -18,6 +20,8 @@ import {
 
 const NAMES_KEY = 'holdem_player_names_v1';
 const THEME_KEY = 'holdem_theme_v1';
+
+const safeJson = async (r) => { try { return await r.json(); } catch { return null; } };
 
 // 9 seats arranged around the felt with EQUAL ARC LENGTH between neighbours
 // (not equal angle) — keeps them evenly spaced even on an elongated felt.
@@ -95,7 +99,7 @@ export default function App() {
   const [calculating, setCalculating] = useState(false);
   const calcVersion = useRef(0);
   const inFlightWorkersRef = useRef([]);
-  const { user, signIn, signOut } = useAuth();
+  const { user, loading: authLoading, signIn, signOut, plan, refreshPlan, startCheckout, openPortal } = useAuth();
   const [saving, setSaving] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -119,6 +123,67 @@ export default function App() {
   const [sharedToast, setSharedToast] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importToast, setImportToast] = useState(null);
+
+  // ── Billing: plan gate, upgrade prompt, return from checkout ──
+  // pro entry points stay hidden in production until stripe is configured
+  const billingOn = plan.billingEnabled || import.meta.env.DEV;
+  const isPro = plan.plan === 'pro';
+  const [limitPrompt, setLimitPrompt] = useState(false);
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const limitShownRef = useRef(false);
+  const [billingToast, setBillingToast] = useState(null);
+  const [activating, setActivating] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('billing') === 'success'; } catch { return false; }
+  });
+
+  function flashBilling(msg) {
+    setBillingToast(msg);
+    setTimeout(() => setBillingToast(null), 3600);
+  }
+
+  // the save response says when a free account is full; prompt once per session
+  function noteLimit(data) {
+    const lim = data && data.limit;
+    if (!lim || lim.plan !== 'free' || !lim.atCap || limitShownRef.current) return;
+    limitShownRef.current = true;
+    setLimitPrompt(true);
+  }
+
+  async function upgradeNow() {
+    setUpgradeBusy(true);
+    const res = await startCheckout('year');
+    setUpgradeBusy(false);
+    if (res && res.error) flashBilling(res.error);
+    else setLimitPrompt(false);
+  }
+
+  // back from stripe: drop the marker from the url
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('billing')) return;
+    params.delete('billing');
+    const q = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+  }, []);
+
+  // the webhook flips the plan; poll until it shows up
+  useEffect(() => {
+    if (!activating) return;
+    if (!authLoading && !user) { setActivating(false); return; }
+    if (!user) return;
+    let cancelled = false;
+    let tries = 0;
+    setBillingToast('Activating Pro…');
+    const tick = async () => {
+      const p = await refreshPlan();
+      if (cancelled) return;
+      if (p.plan === 'pro') { setActivating(false); flashBilling('You’re on Pro'); return; }
+      if (++tries >= 12) { setActivating(false); flashBilling('Payment received. Pro switches on in a moment.'); return; }
+      setTimeout(tick, 1500);
+    };
+    tick();
+    return () => { cancelled = true; };
+  }, [activating, authLoading, user, refreshPlan]);
 
   // ── Auto-load a scenario (or shared replay) from the URL hash on first mount ──
   useEffect(() => {
@@ -283,7 +348,9 @@ export default function App() {
         }),
       });
       if (r.ok) {
-        const data = await r.json().catch(() => null);
+        const data = await safeJson(r);
+        noteLimit(data);
+        refreshPlan();
         if (showHistory) refreshHistory();
         return data && data.search ? data.search.id : null;
       }
@@ -303,6 +370,7 @@ export default function App() {
     setUploadOpen(false);
     setImportToast(`Importing ${chosen.length} hand${chosen.length === 1 ? '' : 's'}…`);
     let saved = 0;
+    let lastSave = null;
     for (const h of chosen) {
       const seats = (h.replay && h.replay.setup && h.replay.setup.seats) || [];
       const playersForRow = seats.map(s =>
@@ -323,10 +391,15 @@ export default function App() {
             favorite: false,
           }),
         });
-        if (r.ok) saved++;
+        if (r.ok) {
+          saved++;
+          lastSave = await safeJson(r);
+        }
       } catch { /* skip a failed hand, keep importing the rest */ }
     }
     await refreshHistory();
+    refreshPlan();
+    noteLimit(lastSave);
     setShowHistory(true);
     setImportToast(`${saved} hand${saved === 1 ? '' : 's'} added to history`);
     setTimeout(() => setImportToast(null), 3200);
@@ -545,6 +618,8 @@ export default function App() {
         }),
       });
       if (!r.ok) throw new Error('save failed');
+      noteLimit(await safeJson(r));
+      refreshPlan();
       // Mark as already-committed so the boundary auto-save won't duplicate it.
       lastSavedScenarioRef.current = scenario;
       setSaveModalOpen(false);
@@ -654,10 +729,13 @@ export default function App() {
   const accountMenuFor = (ctx) => user ? (
     <UserChip
       user={user}
+      plan={billingOn ? plan : null}
       onSignOut={signOut}
       onOpenHistory={ctx !== 'solver' ? openHistory : undefined}
       onOpenShare={ctx === 'calc' ? openShare : undefined}
       onOpenUpload={ctx !== 'solver' ? openUpload : undefined}
+      onUpgrade={billingOn && ctx !== 'solver' ? () => setView('plans') : undefined}
+      onManage={billingOn && ctx !== 'solver' ? async () => { const res = await openPortal(); if (res && res.error) flashBilling(res.error); } : undefined}
     />
   ) : signInEl;
   const themeToggleEl = (
@@ -685,12 +763,20 @@ export default function App() {
     <>
       <ShareModal open={showShare} onClose={() => setShowShare(false)} url={shareUrl} />
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} onConfirm={onImportConfirm} />
-      {(sharedToast || importToast) && (
+      <UpgradePrompt
+        open={limitPrompt}
+        cap={plan.saveCap}
+        busy={upgradeBusy}
+        onClose={() => setLimitPrompt(false)}
+        onCompare={() => { setLimitPrompt(false); setView('plans'); }}
+        onUpgrade={upgradeNow}
+      />
+      {(sharedToast || importToast || billingToast) && (
         <div className="shared-toast">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          {importToast || 'Loaded shared scenario'}
+          {billingToast || importToast || 'Loaded shared scenario'}
         </div>
       )}
     </>
@@ -708,6 +794,25 @@ export default function App() {
           userMenu={accountMenuFor('replayer')}
           themeToggle={themeToggleEl}
           historyDrawer={historyDrawerEl}
+        />
+        {sharedOverlays}
+      </>
+    );
+  }
+
+  if (view === 'plans') {
+    return (
+      <>
+        <PlansView
+          onExit={() => setView('calc')}
+          onNavigate={(v) => { if (v === 'replayer') openReplayer(); else setView(v); }}
+          themeToggle={themeToggleEl}
+          userMenu={accountMenuFor('plans')}
+          user={user}
+          plan={plan}
+          onGetPro={startCheckout}
+          onCreateAccount={() => signIn({ mode: 'signup' })}
+          onManage={openPortal}
         />
         {sharedOverlays}
       </>
@@ -754,6 +859,12 @@ export default function App() {
             </svg>
             Solver
           </button>
+          {billingOn && !isPro && (
+            <button className="btn btn-ghost btn-pro" onClick={() => setView('plans')} title="PokerLab Pro">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /></svg>
+              Pro
+            </button>
+          )}
           {user && (
             <button className="btn btn-ghost" onClick={saveHand} disabled={saving}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -917,7 +1028,7 @@ function SaveModal({ open, busy, error, onClose, onSave }) {
 
 // ─── UserChip — avatar dropdown in the topbar ───
 // omitted handlers hide their menu items
-function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload }) {
+function UserChip({ user, plan, onSignOut, onOpenHistory, onOpenShare, onOpenUpload, onUpgrade, onManage }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -927,6 +1038,7 @@ function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload })
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
   const initial = (user.name || user.email || '?')[0].toUpperCase();
+  const isPro = !!plan && plan.plan === 'pro';
   const avatar = user.image
     ? <img src={user.image} alt="" className="user-avatar user-avatar-img" />
     : <span className="user-avatar">{initial}</span>;
@@ -940,8 +1052,18 @@ function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload })
       {open && (
         <div className="user-menu">
           <div className="user-menu-head">
-            <div className="user-menu-name">{user.name || 'Account'}</div>
+            <div className="user-menu-name">
+              <span>{user.name || 'Account'}</span>
+              {isPro && <span className="pro-badge">PRO</span>}
+            </div>
             <div className="user-menu-email">{user.email}</div>
+            {plan && (
+              <div className="user-menu-plan">
+                {isPro
+                  ? `Pro plan · ${plan.interval === 'year' ? 'annual' : 'monthly'}`
+                  : `Free plan · ${Math.min(plan.saved, plan.saveCap)} of ${plan.saveCap} hands saved`}
+              </div>
+            )}
           </div>
           {onOpenUpload && (
             <button className="user-menu-item" onClick={() => { setOpen(false); onOpenUpload(); }}>
@@ -966,6 +1088,22 @@ function UserChip({ user, onSignOut, onOpenHistory, onOpenShare, onOpenUpload })
                 <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
               </svg>
               Share
+            </button>
+          )}
+          {onUpgrade && !isPro && (
+            <button className="user-menu-item pro" onClick={() => { setOpen(false); onUpgrade(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+              </svg>
+              Upgrade to Pro
+            </button>
+          )}
+          {onManage && isPro && (
+            <button className="user-menu-item" onClick={() => { setOpen(false); onManage(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+              </svg>
+              Manage subscription
             </button>
           )}
           <button className="user-menu-item danger" onClick={() => { setOpen(false); onSignOut(); }}>

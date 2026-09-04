@@ -1,6 +1,6 @@
 # PokerLab — Backend
 
-Auth and persistence for PokerLab. Equity is computed client-side in the frontend; this service handles accounts, the saved-hand API (LRU-capped per user), and rate limiting.
+Auth and persistence for PokerLab. Equity is computed client-side in the frontend; this service handles accounts, the saved-hand API (LRU-capped per user, by plan), Pro billing, and rate limiting.
 
 ## Stack
 
@@ -8,6 +8,7 @@ Auth and persistence for PokerLab. Equity is computed client-side in the fronten
 - Auth.js (NextAuth v5): username/password (bcrypt) + optional Google, JWT sessions
 - Prisma + PostgreSQL (Neon)
 - Upstash Redis for rate limiting (in-memory fallback when unset)
+- Stripe Checkout, Customer Portal, and webhooks for the Pro plan (optional)
 
 ## Setup
 
@@ -25,6 +26,13 @@ AUTH_URL="http://localhost:3000"
 # Google sign-in (optional — omit both to run username/password only)
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
+
+# Pro plan via Stripe (optional — Pro stays hidden in the UI until all four are set)
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+STRIPE_PRICE_MONTHLY=""
+STRIPE_PRICE_YEARLY=""
+APP_URL="http://localhost:5173"   # where Stripe sends users back
 ```
 
 Then:
@@ -52,6 +60,8 @@ src/
 │   ├── api/auth/signup/          username/password signup
 │   ├── api/searches/             saved-hand list + create (LRU-capped)
 │   ├── api/searches/[id]/        favorite, rename, touch, or delete one
+│   ├── api/billing/              status, Stripe Checkout + Customer Portal sessions
+│   ├── api/webhooks/stripe/      signed webhook that mirrors subscriptions onto users
 │   ├── layout.tsx · page.tsx · providers.tsx · theme.ts
 │   └── globals.css
 ├── components/                   Header, auth (SignInButton, UserMenu), ColorModeToggle
@@ -59,7 +69,10 @@ src/
 ├── lib/
 │   ├── prisma.ts                 Prisma client
 │   ├── rateLimit.ts              Upstash + in-memory limiter
-│   └── body.ts                   JSON body parsing + input sanitizing
+│   ├── body.ts                   JSON body parsing + input sanitizing
+│   ├── plan.ts                   plan limits + effective plan lookup
+│   ├── stripe.ts                 Stripe client, price ids, return URL
+│   └── billing.ts                subscription → user sync used by the webhook
 └── types/next-auth.d.ts
 ```
 
@@ -70,6 +83,10 @@ src/
 - `POST /api/searches` — save a hand (prunes least-recently-used non-favorites past the per-user cap)
 - `PATCH /api/searches/[id]` — toggle favorite, rename, or touch (mark recently used)
 - `DELETE /api/searches/[id]` — delete a hand
+- `GET /api/billing/status` — current plan, save cap, and usage
+- `POST /api/billing/checkout` — start a Stripe Checkout session (`{ interval: "month" | "year" }`)
+- `POST /api/billing/portal` — open the Stripe Customer Portal
+- `POST /api/webhooks/stripe` — Stripe webhook (signature-verified)
 
 ## License
 
