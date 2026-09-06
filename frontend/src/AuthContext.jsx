@@ -7,7 +7,23 @@ export const DEFAULT_LIMITS = {
   free: { saveCap: 25, shareLinks: 0, ranges: 3, solves: 3 },
   pro: { saveCap: 5000, shareLinks: 500, ranges: 200, solves: 200 },
 };
-const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false, limits: DEFAULT_LIMITS };
+// production assumes billing is on so the Pro button paints before the status call returns;
+// the response still hides it if stripe isn't configured
+const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: !import.meta.env.DEV, limits: DEFAULT_LIMITS };
+// last known plan per device, so a returning pro user isn't shown upgrade prompts during the fetch
+const PLAN_CACHE_KEY = 'pokerlab_plan_v1';
+function readPlanCache() {
+  try {
+    const raw = localStorage.getItem(PLAN_CACHE_KEY);
+    const p = raw ? JSON.parse(raw) : null;
+    return p && typeof p === 'object' ? { ...EMPTY_PLAN, ...p } : null;
+  } catch { return null; }
+}
+function writePlanCache(p) {
+  try {
+    localStorage.setItem(PLAN_CACHE_KEY, JSON.stringify({ plan: p.plan, interval: p.interval, billingEnabled: p.billingEnabled, saveCap: p.saveCap, limits: p.limits }));
+  } catch { /* storage blocked */ }
+}
 // survives the full-page google redirect so checkout resumes after sign-in
 const CHECKOUT_KEY = 'pokerlab_checkout_intent';
 
@@ -25,7 +41,7 @@ export function AuthProvider({ children }) {
   const [modalError, setModalError] = useState(null);
   const [oauth, setOauth] = useState([]); // configured OAuth provider ids (e.g. ['google'])
   const [modalMode, setModalMode] = useState('signin');
-  const [plan, setPlan] = useState(EMPTY_PLAN);
+  const [plan, setPlan] = useState(() => readPlanCache() || EMPTY_PLAN);
   // 'month' | 'year' while the sign-in modal is a step on the way to checkout
   const [checkoutIntent, setCheckoutIntent] = useState(null);
   // bumps when something deep in the tree wants the plans page
@@ -52,13 +68,15 @@ export function AuthProvider({ children }) {
   const refreshPlan = useCallback(async () => {
     try {
       const r = await fetch('/api/billing/status', { credentials: 'include' });
-      if (!r.ok) { setPlan(EMPTY_PLAN); return EMPTY_PLAN; }
+      if (!r.ok) { const p = readPlanCache() || EMPTY_PLAN; setPlan(p); return p; }
       const next = { ...EMPTY_PLAN, ...(await r.json()) };
+      writePlanCache(next);
       setPlan(next);
       return next;
     } catch {
-      setPlan(EMPTY_PLAN);
-      return EMPTY_PLAN;
+      const p = readPlanCache() || EMPTY_PLAN;
+      setPlan(p);
+      return p;
     }
   }, []);
 
