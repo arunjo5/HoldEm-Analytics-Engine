@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe('PLAN_LIMITS', () => {
   it('caps free at 25 saves and pro at 5000', () => {
-    expect(PLAN_LIMITS).toEqual({ free: { saveCap: 25, shareLinks: 0 }, pro: { saveCap: 5000, shareLinks: 500 } })
+    expect(PLAN_LIMITS).toEqual({ free: { saveCap: 25, shareLinks: 0, ranges: 3, solves: 3 }, pro: { saveCap: 5000, shareLinks: 500, ranges: 200, solves: 200 } })
   })
 })
 
@@ -66,7 +66,7 @@ describe('getPlan', () => {
 
   it('falls back to free when the row is gone', async () => {
     expect(await getPlan('u1')).toEqual({
-      plan: 'free', interval: null, expiresAt: null, saveCap: 25, hasCustomer: false,
+      plan: 'free', interval: null, expiresAt: null, saveCap: 25, limits: PLAN_LIMITS.free, hasCustomer: false,
     })
   })
 
@@ -79,7 +79,7 @@ describe('getPlan', () => {
       plan: 'pro',
       interval: 'month',
       expiresAt: expires.toISOString(),
-      saveCap: 5000,
+      saveCap: 5000, limits: PLAN_LIMITS.pro,
       hasCustomer: true,
     })
   })
@@ -89,7 +89,7 @@ describe('getPlan', () => {
       plan: 'pro', planInterval: 'year', planExpiresAt: null, stripeCustomerId: null,
     })
     expect(await getPlan('u1')).toEqual({
-      plan: 'pro', interval: 'year', expiresAt: null, saveCap: 5000, hasCustomer: false,
+      plan: 'pro', interval: 'year', expiresAt: null, saveCap: 5000, limits: PLAN_LIMITS.pro, hasCustomer: false,
     })
   })
 
@@ -105,7 +105,7 @@ describe('getPlan', () => {
       plan: 'free', planInterval: 'month', planExpiresAt: new Date(NOW + DAY), stripeCustomerId: 'cus_1',
     })
     expect(await getPlan('u1')).toEqual({
-      plan: 'free', interval: null, expiresAt: null, saveCap: 25, hasCustomer: true,
+      plan: 'free', interval: null, expiresAt: null, saveCap: 25, limits: PLAN_LIMITS.free, hasCustomer: true,
     })
   })
 
@@ -115,7 +115,7 @@ describe('getPlan', () => {
       plan: 'pro', planInterval: 'month', planExpiresAt: expires, stripeCustomerId: 'cus_1',
     })
     expect(await getPlan('u1')).toEqual({
-      plan: 'pro', interval: 'month', expiresAt: expires.toISOString(), saveCap: 5000, hasCustomer: true,
+      plan: 'pro', interval: 'month', expiresAt: expires.toISOString(), saveCap: 5000, limits: PLAN_LIMITS.pro, hasCustomer: true,
     })
   })
 
@@ -124,7 +124,7 @@ describe('getPlan', () => {
       plan: 'pro', planInterval: 'month', planExpiresAt: new Date(NOW - GRACE - 1), stripeCustomerId: 'cus_1',
     })
     expect(await getPlan('u1')).toEqual({
-      plan: 'free', interval: null, expiresAt: null, saveCap: 25, hasCustomer: true,
+      plan: 'free', interval: null, expiresAt: null, saveCap: 25, limits: PLAN_LIMITS.free, hasCustomer: true,
     })
   })
 })

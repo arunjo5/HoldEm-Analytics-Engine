@@ -2,10 +2,11 @@ import { prisma } from '@/lib/prisma'
 
 export type Plan = 'free' | 'pro'
 
-export const PLAN_LIMITS: Record<Plan, { saveCap: number; shareLinks: number }> = {
-  free: { saveCap: 25, shareLinks: 0 },
-  // sold as unlimited; the ceilings just bound one account's rows
-  pro: { saveCap: 5000, shareLinks: 500 },
+export type PlanLimits = { saveCap: number; shareLinks: number; ranges: number; solves: number }
+
+export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
+  free: { saveCap: 25, shareLinks: 0, ranges: 3, solves: 3 },
+  pro: { saveCap: 5000, shareLinks: 500, ranges: 200, solves: 200 },
 }
 
 // a missed renewal webhook shouldn't drop a paying user mid-cycle
@@ -22,6 +23,7 @@ export type PlanInfo = {
   interval: 'month' | 'year' | null
   expiresAt: string | null
   saveCap: number
+  limits: PlanLimits
   hasCustomer: boolean
 }
 
@@ -37,6 +39,7 @@ export async function getPlan(userId: string): Promise<PlanInfo> {
     interval: plan === 'pro' ? interval : null,
     expiresAt: plan === 'pro' && u?.planExpiresAt ? u.planExpiresAt.toISOString() : null,
     saveCap: PLAN_LIMITS[plan].saveCap,
+    limits: PLAN_LIMITS[plan],
     hasCustomer: !!u?.stripeCustomerId,
   }
 }

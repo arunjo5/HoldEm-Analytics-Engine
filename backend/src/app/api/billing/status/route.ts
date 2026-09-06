@@ -23,11 +23,11 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({
         plan: 'free', interval: null, expiresAt: null, saveCap: PLAN_LIMITS.free.saveCap,
-        hasCustomer: false, saved: 0, billingEnabled: enabled,
+        hasCustomer: false, saved: 0, billingEnabled: enabled, limits: PLAN_LIMITS,
       })
     }
     const [info, saved] = await Promise.all([getPlan(userId), prisma.search.count({ where: { userId } })])
-    return NextResponse.json({ ...info, saved, billingEnabled: enabled })
+    return NextResponse.json({ ...info, saved, billingEnabled: enabled, limits: PLAN_LIMITS })
   } catch (error) {
     console.error('Error fetching billing status:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

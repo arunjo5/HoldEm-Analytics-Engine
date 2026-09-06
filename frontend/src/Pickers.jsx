@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useLibrary } from './LibraryContext.jsx';
 import { PlayingCard, EmptyCardSlot, SuitGlyph, SUIT_RED } from './Cards.jsx';
 
 export const SUIT_ORDER = ['s', 'h', 'c', 'd'];
@@ -218,6 +219,40 @@ function PresetMenu({ groups, onPick }) {
   );
 }
 
+// saved ranges dropdown, next to the presets
+function MyRangesMenu({ lib, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div className="preset-menu-wrap" ref={ref}>
+      <button type="button" className="preset-trigger" onClick={() => setOpen(o => !o)}>
+        My ranges <span className="preset-caret">▾</span>
+      </button>
+      {open && (
+        <div className="preset-menu myranges-menu">
+          {lib.ranges.length === 0 ? (
+            <div className="myranges-empty">{lib.rangesLoaded ? 'No saved ranges yet' : 'Loading…'}</div>
+          ) : lib.ranges.map(r => (
+            <div key={r.id} className="myrange-row">
+              <button type="button" className="myrange-item" onClick={() => { onPick(r); setOpen(false); }}>
+                <span className="myrange-name">{r.name}</span>
+                <span className="myrange-count">{combosFromKeys(r.keys)} combos</span>
+              </button>
+              <button type="button" className="myrange-del" aria-label={`Delete ${r.name}`} title="Delete" onClick={() => lib.deleteRange(r.id)}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RangePicker({ initial, onCancel, onSave }) {
   const [keys, setKeys] = useState(() => new Set(initial || []));
   const [dragMode, setDragMode] = useState(null); // 'on' | 'off'
@@ -258,6 +293,26 @@ export function RangePicker({ initial, onCancel, onSave }) {
     setKeys(new Set(topRangeByPercent(v)));
   }
 
+  // account library: pick a saved range, or save this one
+  const lib = useLibrary();
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveMsg, setSaveMsg] = useState(null); // { kind: 'ok' | 'err' | 'limit', text }
+  const [saving, setSaving] = useState(false);
+  const { available: libAvailable, rangesLoaded, refreshRanges } = lib;
+  useEffect(() => { if (libAvailable && !rangesLoaded) refreshRanges(); }, [libAvailable, rangesLoaded, refreshRanges]);
+
+  async function saveToLibrary(e) {
+    e.preventDefault();
+    const name = saveName.trim();
+    if (!name || saving) return;
+    setSaving(true);
+    const res = await lib.saveRange(name, Array.from(keys));
+    setSaving(false);
+    if (res.ok) { setSaveMsg({ kind: 'ok', text: `Saved “${name}”` }); setSaveOpen(false); setSaveName(''); }
+    else setSaveMsg({ kind: res.code === 'limit_reached' ? 'limit' : 'err', text: res.error || 'Could not save' });
+  }
+
   return (
     <div className="picker picker-range">
       <div className="picker-head">
@@ -267,6 +322,7 @@ export function RangePicker({ initial, onCancel, onSave }) {
         </div>
         <div className="range-presets">
           <PresetMenu groups={PRESET_GROUPS} onPick={applyPreset} />
+          {lib.available && <MyRangesMenu lib={lib} onPick={(r) => setKeys(new Set(r.keys))} />}
         </div>
       </div>
 
@@ -321,8 +377,41 @@ export function RangePicker({ initial, onCancel, onSave }) {
         ))}
       </div>
 
+      {lib.available && (saveOpen || saveMsg) && (
+        <div className="range-save-row">
+          {saveOpen && (
+            <form className="range-save-form" onSubmit={saveToLibrary}>
+              <input
+                className="range-save-input"
+                value={saveName}
+                onChange={e => setSaveName(e.target.value)}
+                placeholder="Range name"
+                maxLength={60}
+                autoFocus
+                aria-label="Range name"
+              />
+              <button type="submit" className="btn btn-primary" disabled={!saveName.trim() || saving}>{saving ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="btn btn-ghost" onClick={() => { setSaveOpen(false); setSaveMsg(null); }}>Cancel</button>
+            </form>
+          )}
+          {saveMsg && (
+            <div className={'range-save-msg ' + saveMsg.kind} role={saveMsg.kind === 'ok' ? 'status' : 'alert'}>
+              {saveMsg.text}
+              {saveMsg.kind === 'limit' && <button type="button" className="link-btn" onClick={lib.openPlans}>Upgrade to Pro</button>}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="picker-foot">
-        <button className="btn btn-ghost" onClick={() => setKeys(new Set())}>Clear</button>
+        <div className="picker-foot-left">
+          <button className="btn btn-ghost" onClick={() => setKeys(new Set())}>Clear</button>
+          {lib.available && (
+            <button className="btn btn-ghost" disabled={keys.size === 0} onClick={() => { setSaveMsg(null); setSaveOpen(o => !o); }}>
+              Save to My ranges
+            </button>
+          )}
+        </div>
         <div className="picker-foot-right">
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button className="btn btn-primary" disabled={keys.size === 0} onClick={() => onSave(Array.from(keys))}>Save range</button>

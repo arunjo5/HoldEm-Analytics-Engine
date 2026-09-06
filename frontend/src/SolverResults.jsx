@@ -1,5 +1,6 @@
 // Solver — Results screen: 13×13 strategy grid (Strategy/Dominant/Heat), combo
 // drill-in, and EV + exploitability readouts. Consumes the solver's output.
+import { SaveSolveControl } from './SolverSaved.jsx';
 import React, { useState, useEffect } from 'react';
 import { PlayingCard, CardChip } from './Cards.jsx';
 import { rangeKey } from './Pickers.jsx';
@@ -135,7 +136,7 @@ function Sparkline({ trace }) {
   return <svg width={w} height={h} className="sv-spark"><polyline points={pts} fill="none" stroke="var(--gold)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
-export function ResultsView({ spot, board, oopSide, ipSide, oopKeys, ipKeys, result, onResolve, onBackToSetup }) {
+export function ResultsView({ spot, board, oopSide, ipSide, oopKeys, ipKeys, result, onResolve, onBackToSetup, onSaveSolve = null, openPlans }) {
   const nodes = result.nodes;
   const meta = result.meta, trace = result.trace;
   const [nodeId, setNodeId] = useState(nodes[0].id);
@@ -183,6 +184,7 @@ export function ResultsView({ spot, board, oopSide, ipSide, oopKeys, ipKeys, res
         <div className="sv-readout-actions">
           <button className="btn btn-ghost" onClick={onBackToSetup}>Edit spot</button>
           <button className="btn btn-ghost" onClick={onResolve}>Re-solve</button>
+          {onSaveSolve && <SaveSolveControl onSave={onSaveSolve} openPlans={openPlans} />}
         </div>
       </div>
 

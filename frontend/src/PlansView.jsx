@@ -1,24 +1,37 @@
 import React, { useState } from 'react';
 
+import { DEFAULT_LIMITS } from './AuthContext.jsx';
+
 const PRICES = {
-  year: { amount: 5, note: 'Billed $60 a year.' },
-  month: { amount: 7, note: 'Billed month to month.' },
+  year: { amount: 3, note: 'Billed $36 a year.' },
+  month: { amount: 4, note: 'Billed month to month.' },
 };
 
-const FREE_FEATURES = [
-  'Equity calculator, ranges, pot odds & MDF',
-  'Heads-up river solver',
-  'Hand replayer with PokerNow import',
-  'Save up to 25 hands',
-  'Share links',
-];
-export const PRO_FEATURES = [
-  'Everything in Free',
-  'Unlimited saved hands and favorites',
-  'Permanent short share links',
-  'Imported PokerNow hands are never pruned',
-  'Support PokerLab’s development',
-];
+const fmt = (n) => n.toLocaleString('en-US');
+
+// feature rows come from the plan caps so the page always shows the real numbers
+export function freeFeatures(limits = DEFAULT_LIMITS) {
+  const l = limits.free;
+  return [
+    'Equity calculator, ranges, pot odds & MDF',
+    'Heads-up river solver',
+    'Hand replayer with PokerNow import',
+    `Save up to ${fmt(l.saveCap)} hands`,
+    `${l.ranges} saved ranges and ${l.solves} saved solves`,
+    'Share links',
+  ];
+}
+export function proFeatures(limits = DEFAULT_LIMITS) {
+  const l = limits.pro;
+  return [
+    'Everything in Free',
+    `Save up to ${fmt(l.saveCap)} hands`,
+    `${l.ranges} saved ranges and ${l.solves} saved solves`,
+    `${l.shareLinks} permanent short links`,
+    'Support PokerLab’s development',
+  ];
+}
+export const PRO_FEATURES = proFeatures();
 
 export function FeatureList({ items }) {
   return (
@@ -39,6 +52,7 @@ export function PlansView({ onExit, onNavigate, themeToggle, userMenu, user, pla
   const [error, setError] = useState(null);
   const isPro = plan.plan === 'pro';
   const price = PRICES[interval];
+  const limits = plan.limits || DEFAULT_LIMITS;
 
   async function run(fn) {
     setBusy(true);
@@ -77,7 +91,7 @@ export function PlansView({ onExit, onNavigate, themeToggle, userMenu, user, pla
         <div className="plans-toggle" role="tablist" aria-label="Billing period">
           <button role="tab" aria-selected={interval === 'month'} className={interval === 'month' ? 'active' : ''} onClick={() => setInterval('month')}>Monthly</button>
           <button role="tab" aria-selected={interval === 'year'} className={interval === 'year' ? 'active' : ''} onClick={() => setInterval('year')}>
-            Annual <span className="plans-save">2 months free</span>
+            Annual <span className="plans-save">3 months free</span>
           </button>
         </div>
 
@@ -89,7 +103,7 @@ export function PlansView({ onExit, onNavigate, themeToggle, userMenu, user, pla
               <div className="plan-note">Everything you need to study a spot.</div>
             </div>
             <div className="plan-rule" />
-            <FeatureList items={FREE_FEATURES} />
+            <FeatureList items={freeFeatures(limits)} />
             <div className="plan-cta">
               {!user ? (
                 <button className="btn" onClick={onCreateAccount}>Create a free account</button>
@@ -106,7 +120,7 @@ export function PlansView({ onExit, onNavigate, themeToggle, userMenu, user, pla
               <div className="plan-note">{price.note}</div>
             </div>
             <div className="plan-rule" />
-            <FeatureList items={PRO_FEATURES} />
+            <FeatureList items={proFeatures(limits)} />
             <div className="plan-cta">
               {isPro ? (
                 <>

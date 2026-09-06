@@ -1,8 +1,8 @@
 import React from 'react';
-import { FeatureList, PRO_FEATURES } from './PlansView.jsx';
+import { FeatureList, proFeatures } from './PlansView.jsx';
 
 // shown once per session when a free account fills its hand history
-export function UpgradePrompt({ open, cap, busy, onClose, onCompare, onUpgrade }) {
+export function UpgradePrompt({ open, cap, limits, busy, onClose, onCompare, onUpgrade }) {
   if (!open) return null;
   return (
     <div className="picker-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -15,8 +15,8 @@ export function UpgradePrompt({ open, cap, busy, onClose, onCompare, onUpgrade }
           <button className="modal-x" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="share-body">
-          <FeatureList items={PRO_FEATURES.slice(1)} />
-          <div className="upgrade-price">Pro is $5 a month, billed yearly. Cancel anytime.</div>
+          <FeatureList items={proFeatures(limits).slice(1)} />
+          <div className="upgrade-price">Pro is $3 a month, billed yearly. Cancel anytime.</div>
           <div className="upgrade-foot">
             <button className="link-btn" onClick={onCompare}>Compare plans</button>
             <button className="btn btn-ghost" onClick={onClose}>Not now</button>

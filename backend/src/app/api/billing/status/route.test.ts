@@ -17,7 +17,7 @@ import { GET } from '@/app/api/billing/status/route'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { limit } from '@/lib/rateLimit'
-import { getPlan } from '@/lib/plan'
+import { getPlan, PLAN_LIMITS } from '@/lib/plan'
 import { billingEnabled } from '@/lib/stripe'
 
 const asMock = (f: unknown) => f as ReturnType<typeof vi.fn>
@@ -62,6 +62,7 @@ describe('status GET anonymous', () => {
       hasCustomer: false,
       saved: 0,
       billingEnabled: false,
+      limits: PLAN_LIMITS,
     })
     expect(getPlan).not.toHaveBeenCalled()
     expect(count).not.toHaveBeenCalled()
@@ -84,7 +85,7 @@ describe('status GET signed in', () => {
     count.mockResolvedValue(7)
     const res = await GET(req() as never)
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ...PRO, saved: 7, billingEnabled: true })
+    expect(await res.json()).toEqual({ ...PRO, saved: 7, billingEnabled: true, limits: PLAN_LIMITS })
     expect(getPlan).toHaveBeenCalledWith('user1')
     expect(count).toHaveBeenCalledWith({ where: { userId: 'user1' } })
   })

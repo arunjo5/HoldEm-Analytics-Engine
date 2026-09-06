@@ -2,7 +2,12 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 
 const AuthContext = createContext(null);
 
-const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false };
+// mirrors PLAN_LIMITS on the backend until /api/billing/status answers
+export const DEFAULT_LIMITS = {
+  free: { saveCap: 25, shareLinks: 0, ranges: 3, solves: 3 },
+  pro: { saveCap: 5000, shareLinks: 500, ranges: 200, solves: 200 },
+};
+const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false, limits: DEFAULT_LIMITS };
 // survives the full-page google redirect so checkout resumes after sign-in
 const CHECKOUT_KEY = 'pokerlab_checkout_intent';
 
@@ -23,6 +28,9 @@ export function AuthProvider({ children }) {
   const [plan, setPlan] = useState(EMPTY_PLAN);
   // 'month' | 'year' while the sign-in modal is a step on the way to checkout
   const [checkoutIntent, setCheckoutIntent] = useState(null);
+  // bumps when something deep in the tree wants the plans page
+  const [plansNonce, setPlansNonce] = useState(0);
+  const openPlans = useCallback(() => setPlansNonce(n => n + 1), []);
 
   const refresh = useCallback(async () => {
     try {
@@ -231,7 +239,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, refresh, plan, refreshPlan, startCheckout, openPortal }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, refresh, plan, refreshPlan, startCheckout, openPortal, openPlans, plansNonce }}>
       {children}
       <AuthModal
         open={modalOpen}

@@ -63,6 +63,8 @@ src/
 │   ├── api/billing/              status, Stripe Checkout + Customer Portal sessions
 │   ├── api/webhooks/stripe/      signed webhook that mirrors subscriptions onto users
 │   ├── api/share/                Pro short links: create + list, resolve/rename/delete one
+│   ├── api/ranges/               saved ranges (per-plan cap)
+│   ├── api/solves/               saved solver spots (per-plan cap)
 │   ├── layout.tsx · page.tsx · providers.tsx · theme.ts
 │   └── globals.css
 ├── components/                   Header, auth (SignInButton, UserMenu), ColorModeToggle
@@ -74,7 +76,9 @@ src/
 │   ├── plan.ts                   plan limits + effective plan lookup
 │   ├── stripe.ts                 Stripe client, price ids, return URL
 │   ├── billing.ts                subscription → user sync used by the webhook
-│   └── shareLinks.ts             short-link codes, payload validation
+│   ├── shareLinks.ts             short-link codes, payload validation
+│   ├── library.ts                range-key and solver-spot validation for saved items
+│   └── gate.ts                   csrf + session + rate-limit gate for mutating routes
 └── types/next-auth.d.ts
 ```
 
@@ -93,6 +97,10 @@ src/
 - `POST /api/share` — create a short link (Pro; `{ kind: "scenario" | "replay", payload, name? }`)
 - `GET /api/share/[code]` — resolve a short link (public)
 - `PATCH /api/share/[code]` — rename · `DELETE /api/share/[code]` — delete
+- `GET /api/ranges` · `POST /api/ranges` — list / save a range (`{ name, keys }`)
+- `PATCH /api/ranges/[id]` · `DELETE /api/ranges/[id]` — rename or replace keys / delete
+- `GET /api/solves` · `POST /api/solves` — list / save a solver spot (`{ name, config, summary }`)
+- `PATCH /api/solves/[id]` · `DELETE /api/solves/[id]` — rename / delete
 
 ## License
 

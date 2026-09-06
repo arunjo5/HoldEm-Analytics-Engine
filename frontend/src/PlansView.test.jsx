@@ -43,7 +43,7 @@ function deferred() {
 describe('PlansView billing toggle', () => {
   it('defaults to annual: $5 / month billed $60 a year', () => {
     renderPlans();
-    expect(price()).toEqual({ amount: '$5', unit: '/ month', note: 'Billed $60 a year.' });
+    expect(price()).toEqual({ amount: '$3', unit: '/ month', note: 'Billed $36 a year.' });
     expect(screen.getByRole('tab', { name: /Annual/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Monthly' })).toHaveAttribute('aria-selected', 'false');
   });
@@ -51,18 +51,18 @@ describe('PlansView billing toggle', () => {
   it('Monthly swaps the price and note, and Annual swaps back', () => {
     renderPlans();
     fireEvent.click(screen.getByRole('tab', { name: 'Monthly' }));
-    expect(price()).toEqual({ amount: '$7', unit: '/ month', note: 'Billed month to month.' });
+    expect(price()).toEqual({ amount: '$4', unit: '/ month', note: 'Billed month to month.' });
     expect(screen.getByRole('tab', { name: 'Monthly' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Annual/ })).toHaveAttribute('aria-selected', 'false');
     fireEvent.click(screen.getByRole('tab', { name: /Annual/ }));
-    expect(price().amount).toBe('$5');
+    expect(price().amount).toBe('$3');
   });
 
   it('the tablist is labelled and the annual tab advertises the saving', () => {
     renderPlans();
     const list = screen.getByRole('tablist', { name: 'Billing period' });
     expect(within(list).getAllByRole('tab')).toHaveLength(2);
-    expect(list.querySelector('.plans-save').textContent).toBe('2 months free');
+    expect(list.querySelector('.plans-save').textContent).toBe('3 months free');
   });
 });
 
