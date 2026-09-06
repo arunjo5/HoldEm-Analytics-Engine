@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App.jsx';
-import { AuthProvider, useAuth } from './AuthContext.jsx';
+import { DEFAULT_LIMITS, AuthProvider, useAuth } from './AuthContext.jsx';
 
 class FakeWorker {
   constructor() { FakeWorker.instances.push(this); this.onmessage = null; this.posted = []; this.terminated = false; }
@@ -85,7 +85,7 @@ const planOf = () => JSON.parse(screen.getByTestId('plan').textContent);
 const lastOf = () => screen.getByTestId('last').textContent;
 const who = () => screen.getByTestId('user').textContent;
 const click = async (label) => { await act(async () => { fireEvent.click(screen.getByText(label)); }); };
-const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false };
+const EMPTY_PLAN = { plan: 'free', interval: null, expiresAt: null, saveCap: 25, saved: 0, hasCustomer: false, billingEnabled: false, limits: DEFAULT_LIMITS };
 
 function fillAndSubmit({ username = 'tim', password = 'test' } = {}) {
   fireEvent.change(screen.getByLabelText('Username'), { target: { value: username } });
@@ -126,8 +126,7 @@ describe('refreshPlan', () => {
     await waitFor(() => expect(planOf().plan).toBe('pro'));
     expect(planOf()).toEqual({
       plan: 'pro', interval: 'month', expiresAt: null,
-      saveCap: 25, saved: 99, hasCustomer: true, billingEnabled: true,
-    });
+      saveCap: 25, saved: 99, hasCustomer: true, billingEnabled: true, limits: DEFAULT_LIMITS });
     expect(callsTo('/api/billing/status')).toHaveLength(1);
   });
 

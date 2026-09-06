@@ -25,7 +25,7 @@ describe('UpgradePrompt', () => {
   it('names the cap in the copy and quotes the annual price', () => {
     renderPrompt({ cap: 25 });
     expect(within(dialog()).getByText(/Free accounts keep the 25 most recent hands/)).toBeInTheDocument();
-    expect(screen.getByText('Pro is $5 a month, billed yearly. Cancel anytime.')).toBeInTheDocument();
+    expect(screen.getByText('Pro is $3 a month, billed yearly. Cancel anytime.')).toBeInTheDocument();
   });
 
   it('takes the cap from props rather than hardcoding 25', () => {

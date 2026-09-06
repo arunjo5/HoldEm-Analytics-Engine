@@ -101,7 +101,7 @@ export default function App() {
   const [calculating, setCalculating] = useState(false);
   const calcVersion = useRef(0);
   const inFlightWorkersRef = useRef([]);
-  const { user, loading: authLoading, signIn, signOut, plan, refreshPlan, startCheckout, openPortal } = useAuth();
+  const { user, loading: authLoading, signIn, signOut, plan, refreshPlan, startCheckout, openPortal, plansNonce } = useAuth();
   const [saving, setSaving] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -158,6 +158,13 @@ export default function App() {
     if (res && res.error) flashNotice(res.error);
     else setLimitPrompt(false);
   }
+
+  // something deep in the tree (range picker, solver) asked for the plans page
+  useEffect(() => {
+    if (!plansNonce) return;
+    setPicker(null);
+    setView('plans');
+  }, [plansNonce]);
 
   // back from stripe: drop the marker from the url
   useEffect(() => {
@@ -852,6 +859,7 @@ export default function App() {
       <UpgradePrompt
         open={limitPrompt}
         cap={plan.saveCap}
+        limits={plan.limits}
         busy={upgradeBusy}
         onClose={() => setLimitPrompt(false)}
         onCompare={() => { setLimitPrompt(false); setView('plans'); }}

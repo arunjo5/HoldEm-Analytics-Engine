@@ -52,6 +52,10 @@ frontend/
     ├── shareCodec.js       compact share-link encoding (lz-string)
     ├── replayShare.js      share encoding for replays
     ├── shareLinks.js       Pro short links (/s/<code>) client + URL helpers
+    ├── api.js              fetch wrapper for /api
+    ├── library.js          saved ranges + saved solves client
+    ├── LibraryContext.jsx  account library state (ranges, solves, caps)
+    ├── SolverSaved.jsx     saved-solves panel + save control
     ├── Cards.jsx           card chips and glyphs
     ├── Pickers.jsx         CardPicker (52-card grid) + RangePicker (13x13)
     ├── Seat.jsx            PlayerSeat + range thumbnail
@@ -60,5 +64,5 @@ frontend/
     ├── UpgradePrompt.jsx   shown once when a free account fills its history
     ├── ShareModal.jsx      share-link modal
     ├── UploadModal.jsx     PokerNow log import
-    └── AuthContext.jsx     session state from the backend
+    └── AuthContext.jsx     session, plan, and billing state from the backend
 ```

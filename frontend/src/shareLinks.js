@@ -1,3 +1,4 @@
+import { apiCall as call, jsonBody as json } from './api.js';
 // pro short links: /s/<code> carries the same payload as a #s= / #r= link
 const PATH_RE = /^\/s\/([A-Za-z0-9]{6,16})\/?$/;
 
@@ -19,19 +20,6 @@ export function splitShareUrl(url) {
   if (h.startsWith('#r=')) return { kind: 'replay', payload: h.slice(3) };
   return null;
 }
-
-async function call(url, opts) {
-  try {
-    const r = await fetch(url, { credentials: 'include', ...opts });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) return { ok: false, status: r.status, error: data.error || `Request failed (${r.status})`, code: data.code };
-    return { ok: true, ...data };
-  } catch {
-    return { ok: false, status: 0, error: 'Network error' };
-  }
-}
-
-const json = (body) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 export const createShareLink = ({ kind, payload, name }) => call('/api/share', { method: 'POST', ...json({ kind, payload, name }) });
 export const fetchShareLink = (code) => call(`/api/share/${encodeURIComponent(code)}`);

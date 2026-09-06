@@ -49,6 +49,8 @@ model User {
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?
   shareLinks    ShareLink[]
+  savedRanges   SavedRange[]
+  savedSolves   SavedSolve[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -90,4 +92,27 @@ model ShareLink {
   views       Int      @default(0)
   createdAt   DateTime @default(now())
   @@index([userId, payloadHash])
+}
+
+model SavedRange {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  keys      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+}
+
+// a solver spot (board, sides, bet tree) plus a small summary; the solve re-runs on open
+model SavedSolve {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  config    Json
+  summary   Json
+  createdAt DateTime @default(now())
+  @@index([userId])
 }
