@@ -3105,3 +3105,4 @@ body {
 .range-save-msg.err, .range-save-msg.limit { color: var(--red); }
 .range-save-msg .link-btn { margin: 0; }
 .picker-foot-left { display: flex; gap: 8px; align-items: center; }
+.drawer-more { align-self: center; margin-top: 4px; }

@@ -104,14 +104,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+const PAGE_DEFAULT = 60
+const PAGE_MAX = 200
+const listSelect = {
+  id: true, name: true, favorite: true, isReplay: true, createdAt: true, lastAccessedAt: true,
+  board: true, odds: true, playerNames: true, scenario: true, players: true, replay: true,
+} as const
+
+type Card = { v: string; s: string }
+type Seat = { name?: string; pos?: string; cards?: Card[] | null }
+
+// the drawer only previews a row: drop range key lists and replay action logs
+function slimRow(row: { players: unknown; replay: unknown; isReplay: boolean }) {
+  const players = Array.isArray(row.players)
+    ? row.players.map((p) =>
+        p && typeof p === 'object' && (p as { kind?: string }).kind === 'range'
+          ? { kind: 'range', rangeCount: Array.isArray((p as { range?: unknown[] }).range) ? (p as { range: unknown[] }).range.length : 0 }
+          : p
+      )
+    : row.players
+  let replay: unknown = null
+  if (row.isReplay && row.replay && typeof row.replay === 'object') {
+    const rep = row.replay as { setup?: { sb?: number; bb?: number; seats?: Seat[] }; board?: Card[]; actions?: unknown[] }
+    const setup = rep.setup || {}
+    replay = {
+      slim: true,
+      setup: {
+        sb: setup.sb, bb: setup.bb,
+        seats: (setup.seats || []).map((s) => ({ name: s?.name, pos: s?.pos, cards: s?.cards ?? null })),
+      },
+      board: Array.isArray(rep.board) ? rep.board : [],
+      actionCount: Array.isArray(rep.actions) ? rep.actions.length : 0,
+    }
+  }
+  return { ...row, players, replay }
+}
+
+// newest first, keyset-paginated; ?starred=1 narrows to favorites
+export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const userId = session.user.id
 
-    const rl = await limit('read', session.user.id)
+    const rl = await limit('read', userId)
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Too many requests' },
@@ -119,14 +157,50 @@ export async function GET() {
       )
     }
 
-    const searches = await prisma.search.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-    })
+    const params = request?.url ? new URL(request.url).searchParams : new URLSearchParams()
+    const limitParam = Number(params.get('limit'))
+    const take = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(Math.floor(limitParam), PAGE_MAX) : PAGE_DEFAULT
+    const cursor = params.get('cursor')
+    const starred = params.get('starred') === '1'
 
-    return NextResponse.json({ searches })
+    const rows = await prisma.search.findMany({
+      where: { userId, ...(starred ? { favorite: true } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: listSelect,
+    })
+    const page = rows.slice(0, take)
+    const nextCursor = rows.length > take ? page[page.length - 1].id : null
+
+    return NextResponse.json({ searches: page.map(slimRow), nextCursor })
   } catch (error) {
     console.error('Error fetching searches:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// clear everything that isn't a favorite
+export async function DELETE(request: NextRequest) {
+  try {
+    if (request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const rl = await limit('save', session.user.id)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
+    const res = await prisma.search.deleteMany({ where: { userId: session.user.id, favorite: false } })
+    return NextResponse.json({ deleted: res.count })
+  } catch (error) {
+    console.error('Error clearing searches:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

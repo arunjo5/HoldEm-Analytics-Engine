@@ -85,7 +85,9 @@ src/
 ## API
 
 - `POST /api/auth/signup` — create a username/password account
-- `GET /api/searches` — list saved hands
+- `GET /api/searches` — list saved hands, newest first, in pages (`?limit=60&cursor=<id>`, `?starred=1`); rows are previews, so range key lists and replay action logs are omitted
+- `GET /api/searches/[id]` — the full saved hand
+- `DELETE /api/searches` — delete every non-favorite
 - `POST /api/searches` — save a hand (prunes least-recently-used non-favorites past the per-user cap)
 - `PATCH /api/searches/[id]` — toggle favorite, rename, or touch (mark recently used)
 - `DELETE /api/searches/[id]` — delete a hand

@@ -6,7 +6,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/lib/rateLimit', () => ({ limit: vi.fn(async () => ({ ok: true, retryAfter: 0 })) }))
 
-import { PATCH, DELETE } from '@/app/api/searches/[id]/route'
+import { GET, PATCH, DELETE } from '@/app/api/searches/[id]/route'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { limit } from '@/lib/rateLimit'
@@ -188,5 +188,73 @@ describe('searches [id] cross-site hardening', () => {
       expect((await PATCH(req({ favorite: true }, { 'sec-fetch-site': site }) as never, ctx('s1') as never)).status).toBe(200)
       expect((await DELETE(req({}, { 'sec-fetch-site': site }) as never, ctx('s1') as never)).status).toBe(200)
     }
+  })
+})
+
+describe('search GET', () => {
+  const mock = (f: unknown) => f as ReturnType<typeof vi.fn>
+  // the whole row: range key lists and replay actions survive, unlike the list preview
+  const full = {
+    id: 's1',
+    userId: 'user1',
+    name: 'spot',
+    favorite: true,
+    isReplay: true,
+    players: [{ kind: 'range', range: ['AA', 'KK'] }, { kind: 'hand', hand: [{ v: 'A', s: 's' }] }],
+    board: [{ v: 'Q', s: 'd' }],
+    odds: { 0: { win: 61.2 } },
+    playerNames: ['Hero', null],
+    scenario: '~Co',
+    replay: {
+      setup: { sb: 50, bb: 100, seats: [{ name: 'p0', pos: 'BTN', stack: 10000, cards: null }] },
+      actions: [{ seat: 0, type: 'call', amount: 100 }],
+      board: [],
+      board2: null,
+      won: { 1: 200 },
+      runResults: null,
+    },
+    createdAt: '2024-03-01T00:00:00.000Z',
+    lastAccessedAt: '2024-03-02T00:00:00.000Z',
+  }
+
+  it('401 when unauthenticated, before the lookup', async () => {
+    mock(auth).mockResolvedValue(null)
+    expect((await GET(req({}) as never, ctx('s1') as never)).status).toBe(401)
+    expect(prisma.search.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('429 with Retry-After on the read limiter, before the lookup', async () => {
+    mock(limit).mockResolvedValue({ ok: false, retryAfter: 7 })
+    const res = await GET(req({}) as never, ctx('s1') as never)
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('7')
+    expect(limit).toHaveBeenCalledWith('read', 'user1')
+    expect(prisma.search.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('scopes the lookup to the route id AND session user', async () => {
+    await GET(req({}) as never, ctx('s9') as never)
+    expect(mock(prisma.search.findFirst).mock.calls[0][0]).toEqual({ where: { id: 's9', userId: 'user1' } })
+  })
+
+  it('404 for a search the user does not own', async () => {
+    mock(prisma.search.findFirst).mockResolvedValue(null)
+    const res = await GET(req({}) as never, ctx('other') as never)
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Search not found' })
+  })
+
+  it('returns the full row with nothing slimmed', async () => {
+    mock(prisma.search.findFirst).mockResolvedValue(full)
+    const res = await GET(req({}) as never, ctx('s1') as never)
+    expect(res.status).toBe(200)
+    expect((await res.json()).search).toEqual(full)
+  })
+
+  it('500 when the lookup fails', async () => {
+    mock(prisma.search.findFirst).mockRejectedValue(new Error('db down'))
+    const res = await GET(req({}) as never, ctx('s1') as never)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Internal server error' })
   })
 })

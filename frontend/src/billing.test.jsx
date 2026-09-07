@@ -635,7 +635,11 @@ describe('save-limit prompt', () => {
     mockFetch({
       '/api/auth/session': ok({ user: USER }),
       '/api/billing/status': () => status({ saved }),
-      '/api/searches': () => { saved++; return ok({ search: { id: 'x' } }); },
+      '/api/searches': (u, o) => {
+        if (((o && o.method) || 'GET') !== 'POST') return ok({ searches: [] }); // the prefetch
+        saved++;
+        return ok({ search: { id: 'x' } });
+      },
     });
     renderApp();
     await findChip();
