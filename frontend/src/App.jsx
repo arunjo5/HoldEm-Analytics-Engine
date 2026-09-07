@@ -24,6 +24,8 @@ const NAMES_KEY = 'holdem_player_names_v1';
 const THEME_KEY = 'holdem_theme_v1';
 
 const safeJson = async (r) => { try { return await r.json(); } catch { return null; } };
+const safeFetchJson = async (url) => { try { const r = await fetch(url, { credentials: 'include' }); return r.ok ? await safeJson(r) : null; } catch { return null; } };
+const HISTORY_PAGE = 60;
 
 // 9 seats arranged around the felt with EQUAL ARC LENGTH between neighbours
 // (not equal angle) — keeps them evenly spaced even on an elongated felt.
@@ -116,6 +118,11 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [historyCursor, setHistoryCursor] = useState(null);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const historyLoadedRef = useRef(false);
+  const historyInflightRef = useRef(null);
+  const starredLoadedRef = useRef(false);
 
   // ── Replayer: calculator vs. hand replayer view ──
   const [view, setView] = useState('calc'); // 'calc' | 'replayer'
@@ -262,21 +269,74 @@ export default function App() {
   }, [playerNames]);
 
   // ── History API ──
+  const fetchHistoryPage = useCallback(async (params) => {
+    const q = new URLSearchParams({ limit: String(HISTORY_PAGE), ...params });
+    const r = await fetch(`/api/searches?${q}`, { credentials: 'include' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    return { items: (data.searches || []).map(toHistoryItem), nextCursor: data.nextCursor || null };
+  }, []);
+
+  // first page. the spinner only shows when nothing is loaded yet; otherwise the
+  // list stays up while it refreshes underneath
   const refreshHistory = useCallback(async () => {
-    if (!user) { setHistory([]); return; }
-    setHistoryLoading(true);
+    if (!user) { setHistory([]); setHistoryCursor(null); historyLoadedRef.current = false; return; }
+    if (historyInflightRef.current) return historyInflightRef.current;
+    if (!historyLoadedRef.current) setHistoryLoading(true);
     setHistoryError(null);
+    const run = (async () => {
+      try {
+        const { items, nextCursor } = await fetchHistoryPage({});
+        setHistory(items);
+        setHistoryCursor(nextCursor);
+        historyLoadedRef.current = true;
+        starredLoadedRef.current = false;
+      } catch (e) {
+        setHistoryError(e.message || 'Network error');
+      } finally {
+        setHistoryLoading(false);
+        historyInflightRef.current = null;
+      }
+    })();
+    historyInflightRef.current = run;
+    return run;
+  }, [user, fetchHistoryPage]);
+
+  // warm the list (and the database) right after sign-in so the drawer opens instantly
+  useEffect(() => {
+    if (user && !historyLoadedRef.current) refreshHistory();
+  }, [user, refreshHistory]);
+
+  const mergeHistory = (items) => setHistory(prev => {
+    const seen = new Set(prev.map(h => h.id));
+    return [...prev, ...items.filter(i => !seen.has(i.id))].sort((a, b) => b.ts - a.ts);
+  });
+
+  async function loadMoreHistory() {
+    if (!historyCursor || historyLoadingMore) return;
+    setHistoryLoadingMore(true);
     try {
-      const r = await fetch('/api/searches', { credentials: 'include' });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      setHistory((data.searches || []).map(toHistoryItem));
+      const { items, nextCursor } = await fetchHistoryPage({ cursor: historyCursor });
+      mergeHistory(items);
+      setHistoryCursor(nextCursor);
     } catch (e) {
-      setHistoryError(e.message || 'Network error');
+      flashNotice(e.message || 'Could not load more');
     } finally {
-      setHistoryLoading(false);
+      setHistoryLoadingMore(false);
     }
-  }, [user]);
+  }
+
+  // favorites beyond the loaded pages, fetched once the Starred tab opens
+  async function loadStarredHistory() {
+    if (starredLoadedRef.current || !historyCursor) return;
+    starredLoadedRef.current = true;
+    try {
+      const { items } = await fetchHistoryPage({ starred: '1', limit: '200' });
+      mergeHistory(items);
+    } catch {
+      starredLoadedRef.current = false;
+    }
+  }
 
   // ── Pro short links ──
   const [links, setLinks] = useState(null); // null = not loaded yet
@@ -354,10 +414,15 @@ export default function App() {
   }
 
   async function clearAllUnfavorited() {
-    const toDelete = history.filter(h => !h.starred);
     setHistory(h => h.filter(x => x.starred));
-    for (const h of toDelete) {
-      fetch(`/api/searches/${h.id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    setHistoryCursor(null);
+    try {
+      const r = await fetch('/api/searches', { method: 'DELETE', credentials: 'include' });
+      if (!r.ok) throw new Error();
+      refreshPlan();
+    } catch {
+      flashNotice('Could not clear history');
+      refreshHistory();
     }
   }
 
@@ -372,12 +437,19 @@ export default function App() {
     }).catch(() => {});
   }
 
-  function loadHistoryItem(item) {
+  async function loadHistoryItem(item) {
     touchHistoryItem(item.id);
     // Replays reopen in the replayer instead of loading into the calculator.
     if (item.isReplay && item.replay) {
+      let replay = item.replay;
+      if (replay.slim) {
+        // the list only carries a preview; pull the full hand now
+        const res = await safeFetchJson(`/api/searches/${item.id}`);
+        if (!res || !res.search || !res.search.replay) { flashNotice('Could not load that hand'); return; }
+        replay = res.search.replay;
+      }
       commitToHistory();
-      setReplayHand({ ...item.replay, savedId: item.id, favorited: !!item.starred });
+      setReplayHand({ ...replay, savedId: item.id, favorited: !!item.starred });
       setView('replayer');
       setShowHistory(false);
       return;
@@ -842,6 +914,11 @@ export default function App() {
       onDelete={deleteHistoryItem}
       onClear={clearAllUnfavorited}
       user={user}
+      cap={plan.saveCap}
+      hasMore={!!historyCursor}
+      loadingMore={historyLoadingMore}
+      onLoadMore={loadMoreHistory}
+      onNeedStarred={loadStarredHistory}
       links={billingOn && (isPro || (links && links.length > 0)) ? links || [] : undefined}
       linksLoading={linksLoading}
       linkUrl={shortLinkUrl}
@@ -1239,7 +1316,7 @@ function toHistoryItem(s) {
       topName: null,
       topEquity: null,
       blindsLabel: rep.setup ? `${rep.setup.sb}/${rep.setup.bb}` : null,
-      actionCount: Array.isArray(rep.actions) ? rep.actions.length : 0,
+      actionCount: rep.actionCount ?? (Array.isArray(rep.actions) ? rep.actions.length : 0),
       starred: !!s.favorite,
     };
   }
@@ -1276,7 +1353,7 @@ function toHistoryItem(s) {
     boardLen: board.length,
     boardPreview: board.slice(0, 5),
     heroCards: hero && hero.kind === 'hand' ? hero.hand : null,
-    heroLabel: hero && hero.kind === 'range' ? `${hero.range?.length || 0} combos` : null,
+    heroLabel: hero && hero.kind === 'range' ? `${hero.rangeCount ?? hero.range?.length ?? 0} combos` : null,
     heroName: nameOf(heroIdx),
     heroEquity: heroEq ? heroEq.equity : null,
     topName: nameOf(topIdx),

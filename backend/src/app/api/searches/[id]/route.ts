@@ -10,6 +10,31 @@ async function ownedSearch(userId: string, id: string) {
   return prisma.search.findFirst({ where: { id, userId } })
 }
 
+// the full row (replay actions, range lists) for opening a hand
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const rl = await limit('read', session.user.id)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      )
+    }
+    const search = await ownedSearch(session.user.id, params.id)
+    if (!search) {
+      return NextResponse.json({ error: 'Search not found' }, { status: 404 })
+    }
+    return NextResponse.json({ search })
+  } catch (error) {
+    console.error('Error fetching search:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }

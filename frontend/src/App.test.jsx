@@ -331,7 +331,7 @@ describe('optimistic history CRUD', () => {
     expect(await screen.findByText('one')).toBeInTheDocument();
   });
 
-  it('clear-all deletes each unfavorited row, keeps starred rows, and does not roll back on failure', async () => {
+  it('clear-all sends one bulk delete, keeps starred rows, and does not roll back on failure', async () => {
     mockFetch({
       '/api/auth/session': ok({ user: USER }),
       '/api/searches/': () => { throw new Error('net'); },
@@ -351,8 +351,8 @@ describe('optimistic history CRUD', () => {
     expect(screen.queryByText('one')).toBeNull();
     expect(screen.queryByText('three')).toBeNull();
     expect(screen.getByText('two')).toBeInTheDocument();
-    const delUrls = callsTo('/api/searches/', 'DELETE').map(([u]) => String(u));
-    expect(delUrls).toEqual(['/api/searches/h1', '/api/searches/h3']);
+    const delUrls = callsTo('/api/searches', 'DELETE').map(([u]) => String(u));
+    expect(delUrls).toEqual(['/api/searches']);
     await act(async () => {});
     expect(screen.queryByText('one')).toBeNull();
     expect(screen.getByText('two')).toBeInTheDocument();
@@ -673,7 +673,7 @@ describe('UserChip', () => {
     expect(within(menu).getByText('Sign out')).toBeInTheDocument();
   });
 
-  it('Hand history closes the menu, opens the drawer, and refreshes /api/searches', async () => {
+  it('Hand history closes the menu and opens the drawer; the list is prefetched at sign-in and refreshed on open', async () => {
     mockFetch({
       '/api/auth/session': ok({ user: USER }),
       '/api/searches': ok({ searches: [] }),
@@ -683,8 +683,8 @@ describe('UserChip', () => {
     fireEvent.click(screen.getByText('Hand history'));
     expect(document.querySelector('.user-menu')).toBeNull();
     expect(await screen.findByRole('dialog', { name: 'Hand history' })).toBeInTheDocument();
-    expect(callsTo('/api/searches', 'GET')).toHaveLength(1);
     expect(await screen.findByText('No saved hands yet')).toBeInTheDocument();
+    expect(callsTo('/api/searches', 'GET')).toHaveLength(2);
   });
 
   it('Share closes the menu and opens the share modal with the scenario url', async () => {

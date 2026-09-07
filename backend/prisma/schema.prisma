@@ -77,6 +77,8 @@ model Search {
   createdAt   DateTime @default(now())
   lastAccessedAt DateTime @default(now())
   name        String?
+  @@index([userId, createdAt])
+  @@index([userId, favorite, lastAccessedAt])
 }
 
 // pro short links; payload uses the #s= / #r= encoding

@@ -203,6 +203,11 @@ export function HistoryDrawer({
   onDelete,
   onClear,
   user,
+  cap,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  onNeedStarred,
   links,
   linksLoading,
   linkUrl,
@@ -236,7 +241,7 @@ export function HistoryDrawer({
             </div>
             {user && (
               <div className="drawer-sub" style={{ marginTop: 2, fontSize: 11, opacity: 0.7 }}>
-                Showing your latest 500 hands (favorites kept first)
+                Showing your latest {cap || 500} hands (favorites kept first)
               </div>
             )}
           </div>
@@ -247,7 +252,7 @@ export function HistoryDrawer({
           <button className={'drawer-tab ' + (filter === 'all' ? 'active' : '')} onClick={() => setFilter('all')}>
             All<span className="drawer-tab-count">{history.length}</span>
           </button>
-          <button className={'drawer-tab ' + (filter === 'starred' ? 'active' : '')} onClick={() => setFilter('starred')}>
+          <button className={'drawer-tab ' + (filter === 'starred' ? 'active' : '')} onClick={() => { setFilter('starred'); if (onNeedStarred) onNeedStarred(); }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 4 }}>
               <path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.7 1.4 6.7L12 17.7l-6.1 3.3 1.4-6.7L2.2 9.6l6.9-.8z" />
             </svg>
@@ -330,15 +335,24 @@ export function HistoryDrawer({
                   : 'Hit Favorite while analyzing to keep a hand for later.'}
               </div>
             </div>
-          ) : list.map(h => (
-            <HistoryRow
-              key={h.id}
-              item={h}
-              onLoad={() => onLoad(h)}
-              onToggleFavorite={() => onToggleFavorite(h.id, !h.starred)}
-              onDelete={() => onDelete(h.id)}
-            />
-          ))}
+          ) : (
+            <>
+              {list.map(h => (
+                <HistoryRow
+                  key={h.id}
+                  item={h}
+                  onLoad={() => onLoad(h)}
+                  onToggleFavorite={() => onToggleFavorite(h.id, !h.starred)}
+                  onDelete={() => onDelete(h.id)}
+                />
+              ))}
+              {filter === 'all' && hasMore && (
+                <button className="btn btn-ghost drawer-more" onClick={onLoadMore} disabled={loadingMore}>
+                  {loadingMore ? 'Loading…' : 'Load more'}
+                </button>
+              )}
+            </>
+          )}
         </div>
       </aside>
     </>
